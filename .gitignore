@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+*.log
+Backend/data/*.db
+Backend/data/*.db-shm
+Backend/data/*.db-wal
+Front end/dist/
+Front end/node_modules/
+Front end/src-tauri/target/
