@@ -21,8 +21,8 @@
     ,
     "bundle": {
       "resources": [
-        "../Backend/data/app.db",
-        "../Backend/uploads"
+        "../Backend",
+        "bundled/node"
       ]
     }
   }

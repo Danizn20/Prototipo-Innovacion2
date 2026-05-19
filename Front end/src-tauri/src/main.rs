@@ -48,9 +48,47 @@ fn copy_bundled_db_to_persist() {
   }
 }
 
+fn try_spawn_bundled_node_runner() {
+  if let Some(resource_dir) = tauri::api::path::resource_dir() {
+    // find node binary (windows: node.exe, unix: node)
+    let node_candidate = find_resource_file(&resource_dir, "node.exe")
+      .or_else(|| find_resource_file(&resource_dir, "node"));
+
+    // find packaged start script
+    let start_script = find_resource_file(&resource_dir, "start-packaged.js");
+
+    if let (Some(node_path), Some(start_path)) = (node_candidate, start_script) {
+      println!("Found bundled node: {}", node_path.display());
+      println!("Found start script: {}", start_path.display());
+
+      // determine persistent app dir to pass to the script
+      let mut persist_dir = tauri::api::path::app_data_dir().unwrap_or_else(|| PathBuf::from("."));
+      persist_dir.push("PrototipoInnovacion");
+
+      // spawn node start-packaged.js
+      match std::process::Command::new(node_path)
+        .arg(start_path)
+        .env("PROTOTIPO_DATA_DIR", persist_dir.as_os_str())
+        .env("PROTOTIPO_UPLOADS_DIR", persist_dir.join("uploads"))
+        .spawn()
+      {
+        Ok(child) => {
+          println!("Spawned bundled node runner (pid={})", child.id());
+        }
+        Err(e) => {
+          eprintln!("Failed to spawn bundled node runner: {}", e);
+        }
+      }
+    }
+  }
+}
+
 fn main() {
   // attempt to ensure a persistent DB is available for the packaged app
   copy_bundled_db_to_persist();
+
+  // try to spawn bundled node runner (if Node runtime and scripts are included in resources)
+  try_spawn_bundled_node_runner();
 
   tauri::Builder::default()
     .run(tauri::generate_context!())
