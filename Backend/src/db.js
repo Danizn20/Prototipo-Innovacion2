@@ -3,8 +3,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
-const dataDir = path.resolve('Backend', 'data');
-const uploadsDir = path.resolve('Backend', 'uploads');
+// Support configurable persistent data directory (useful when packaged)
+// If PROTOTIPO_DATA_DIR is set (absolute path), use it. Otherwise fall back to repo Backend/data.
+const configuredDataDir = process.env.PROTOTIPO_DATA_DIR && String(process.env.PROTOTIPO_DATA_DIR).trim().length > 0
+  ? path.resolve(String(process.env.PROTOTIPO_DATA_DIR))
+  : path.resolve('Backend', 'data');
+
+const configuredUploadsDir = process.env.PROTOTIPO_UPLOADS_DIR && String(process.env.PROTOTIPO_UPLOADS_DIR).trim().length > 0
+  ? path.resolve(String(process.env.PROTOTIPO_UPLOADS_DIR))
+  : path.resolve('Backend', 'uploads');
+
+const dataDir = configuredDataDir;
+const uploadsDir = configuredUploadsDir;
 const dbPath = path.join(dataDir, 'app.db');
 const require = createRequire(import.meta.url);
 
