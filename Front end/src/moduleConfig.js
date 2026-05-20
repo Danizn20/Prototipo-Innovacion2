@@ -107,6 +107,35 @@ export const MODULES = {
       notes: ''
     }
   },
+  inventory_control: {
+    key: 'inventory_control',
+    label: 'Inventario',
+    title: 'Control de inventario',
+    subtitle: 'Listado maestro de productos con compra, venta, caducidad, ingreso, cantidad y valor de mercado.',
+    actionLabel: 'Guardar registro',
+    listLabel: 'Inventario completo',
+    displayLabel: (record) => `${record.product || 'Producto'} · ${record.quantity ?? 0} unidades`,
+    fields: [
+      { name: 'product', label: 'Producto', type: 'text', placeholder: 'Arroz bolsa 5kg', required: true },
+      { name: 'purchaseValue', label: 'Valor de compra', type: 'number', step: '0.01', min: 0 },
+      { name: 'saleValue', label: 'Valor de venta', type: 'number', step: '0.01', min: 0 },
+      { name: 'expiryDate', label: 'Fecha de caducidad', type: 'date' },
+      { name: 'entryDate', label: 'Fecha de ingreso al local', type: 'date' },
+      { name: 'quantity', label: 'Cantidad', type: 'number', min: 0 },
+      { name: 'marketValue', label: 'Valor de mercado', type: 'number', step: '0.01', min: 0 },
+      { name: 'notes', label: 'Observaciones', type: 'textarea', rows: 4, placeholder: 'Proveedor, lote, alertas, rotacion...' }
+    ],
+    defaultValues: {
+      product: '',
+      purchaseValue: 0,
+      saleValue: 0,
+      expiryDate: '',
+      entryDate: '',
+      quantity: 0,
+      marketValue: 0,
+      notes: ''
+    }
+  },
   sales: {
     key: 'sales',
     label: 'Ventas',
@@ -183,6 +212,7 @@ export const MODULE_LABELS = {
   products: 'Productos',
   suppliers: 'Proveedores',
   product_values: 'Valores de Productos',
+  inventory_control: 'Inventario',
   sales: 'Ventas',
   reports: 'Reportes',
   documents: 'Documentos'
@@ -190,7 +220,7 @@ export const MODULE_LABELS = {
   settings: 'Configuraciones'
 };
 
-export const MODULE_ORDER = ['home', 'dashboard', 'products', 'suppliers', 'product_values', 'sales', 'reports', 'documents', 'settings'];
+export const MODULE_ORDER = ['home', 'dashboard', 'products', 'suppliers', 'product_values', 'inventory_control', 'sales', 'reports', 'documents', 'settings'];
 
 export function getModuleConfig(moduleKey) {
   return MODULES[moduleKey];
@@ -205,6 +235,7 @@ export function getInitialForms() {
     products: getDefaultForm('products'),
     suppliers: getDefaultForm('suppliers'),
     product_values: getDefaultForm('product_values'),
+    inventory_control: getDefaultForm('inventory_control'),
     sales: getDefaultForm('sales'),
     reports: getDefaultForm('reports')
   };

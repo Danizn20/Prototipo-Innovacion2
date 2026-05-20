@@ -94,6 +94,10 @@ const moduleSeeds = {
     { product: 'Arroz bolsa 5kg', cost: 4.5, salePrice: 6.5, discount: 0.2, margin: 30, updatedOn: '2026-05-18', notes: 'Precio por temporada' },
     { product: 'Aceite vegetal 1L', cost: 2.8, salePrice: 4.2, discount: 0, margin: 33, updatedOn: '2026-05-18', notes: 'Margen sugerido' }
   ],
+  inventory_control: [
+    { product: 'Arroz bolsa 5kg', purchaseValue: 4.5, saleValue: 6.5, expiryDate: '2026-10-01', entryDate: '2026-05-18', quantity: 120, marketValue: 6.2, notes: 'Control principal de rotacion' },
+    { product: 'Aceite vegetal 1L', purchaseValue: 2.8, saleValue: 4.2, expiryDate: '2026-08-20', entryDate: '2026-05-18', quantity: 84, marketValue: 4.1, notes: 'Lote de reposicion' }
+  ],
   sales: [
     { date: '2026-05-18', product: 'Arroz bolsa 5kg', quantity: 5, unitPrice: 6.5, total: 32.5, customer: 'Cliente mostrador', paymentMethod: 'Efectivo', status: 'Cerrada', notes: 'Venta diaria' },
     { date: '2026-05-18', product: 'Aceite vegetal 1L', quantity: 2, unitPrice: 4.2, total: 8.4, customer: 'Cliente fiel', paymentMethod: 'Transferencia', status: 'Cerrada', notes: 'Pago confirmado' }
@@ -188,7 +192,7 @@ export function deleteModuleRecord(id) {
 }
 
 export function dashboardSummary() {
-  const moduleNames = ['products', 'suppliers', 'product_values', 'sales', 'reports'];
+  const moduleNames = ['products', 'suppliers', 'product_values', 'inventory_control', 'sales', 'reports'];
   const summary = {};
 
   for (const moduleName of moduleNames) {

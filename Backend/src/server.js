@@ -23,7 +23,7 @@ const app = express();
 const port = Number(process.env.PORT || 3001);
 const uploadsDir = getUploadsDir();
 
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use('/uploads', express.static(uploadsDir));
 
@@ -37,6 +37,65 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 const memoryUpload = multer({ storage: multer.memoryStorage() });
+
+function normalizeInventoryRow(record) {
+  const quantity = Number(record.quantity || 0);
+  const purchaseValue = Number(record.purchaseValue || 0);
+  const saleValue = Number(record.saleValue || 0);
+  const marketValue = Number(record.marketValue || 0);
+
+  return {
+    ...record,
+    quantity,
+    purchaseValue,
+    saleValue,
+    marketValue,
+    investmentTotal: Number((quantity * purchaseValue).toFixed(2)),
+    incomeTotal: Number((quantity * saleValue).toFixed(2)),
+    marketTotal: Number((quantity * marketValue).toFixed(2)),
+    projectedMargin: Number(((quantity * saleValue) - (quantity * purchaseValue)).toFixed(2))
+  };
+}
+
+function buildInventoryWorkbook(records) {
+  const inventoryRows = records.map(flattenRecord).map(normalizeInventoryRow);
+  const summary = inventoryRows.reduce((accumulator, record) => {
+    accumulator.quantity += Number(record.quantity || 0);
+    accumulator.investmentTotal += Number(record.investmentTotal || 0);
+    accumulator.incomeTotal += Number(record.incomeTotal || 0);
+    accumulator.marketTotal += Number(record.marketTotal || 0);
+    return accumulator;
+  }, { quantity: 0, investmentTotal: 0, incomeTotal: 0, marketTotal: 0 });
+
+  const workbook = XLSX.utils.book_new();
+  const inventorySheet = XLSX.utils.json_to_sheet(inventoryRows.map((record) => ({
+    id: record.id,
+    product: record.product,
+    purchaseValue: record.purchaseValue,
+    saleValue: record.saleValue,
+    expiryDate: record.expiryDate,
+    entryDate: record.entryDate,
+    quantity: record.quantity,
+    marketValue: record.marketValue,
+    investmentTotal: record.investmentTotal,
+    incomeTotal: record.incomeTotal,
+    projectedMargin: record.projectedMargin,
+    notes: record.notes
+  })));
+  const summarySheet = XLSX.utils.aoa_to_sheet([
+    ['Metrica', 'Valor'],
+    ['Registros', inventoryRows.length],
+    ['Cantidad total', summary.quantity],
+    ['Inversion total', summary.investmentTotal],
+    ['Ingreso estimado', summary.incomeTotal],
+    ['Valor de mercado', summary.marketTotal],
+    ['Margen proyectado', Number((summary.incomeTotal - summary.investmentTotal).toFixed(2))]
+  ]);
+
+  XLSX.utils.book_append_sheet(workbook, inventorySheet, 'Inventario');
+  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Resumen');
+  return workbook;
+}
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, message: 'Backend local de inventario listo' });
@@ -78,10 +137,15 @@ app.delete('/api/modules/:module/records/:id', (req, res) => {
 });
 
 app.get('/api/modules/:module/export', (req, res) => {
-  const records = listModuleRecords(req.params.module).map(flattenRecord);
-  const worksheet = XLSX.utils.json_to_sheet(records);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, req.params.module.slice(0, 31) || 'Datos');
+  const records = listModuleRecords(req.params.module);
+  const workbook = req.params.module === 'inventory_control'
+    ? buildInventoryWorkbook(records)
+    : (() => {
+      const worksheet = XLSX.utils.json_to_sheet(records.map(flattenRecord));
+      const createdWorkbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(createdWorkbook, worksheet, req.params.module.slice(0, 31) || 'Datos');
+      return createdWorkbook;
+    })();
   const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

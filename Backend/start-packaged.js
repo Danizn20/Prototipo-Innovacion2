@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 
 function getDefaultPersistDir() {
   if (process.platform === 'win32') {
-    return path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\', 'AppData', 'Roaming'), 'PrototipoInnovacion');
+    return path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\\\', 'AppData', 'Roaming'), 'PrototipoInnovacion');
   }
 
   if (process.platform === 'darwin') {

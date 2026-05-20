@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { jsPDF } from 'jspdf';
+import { autoTable } from 'jspdf-autotable';
 import { apiJson, downloadFile, uploadFormData } from './api.js';
 import { AUTH_CREDENTIALS, getDefaultForm, getInitialForms, getModuleConfig, MODULE_LABELS, MODULE_ORDER } from './moduleConfig.js';
 
@@ -8,6 +10,69 @@ const SETTINGS_STORAGE_KEY = 'prototipo_settings';
 
 function isLoggedIn() {
   return sessionStorage.getItem(AUTH_STORAGE_KEY) === 'true';
+}
+
+const moneyFormatter = new Intl.NumberFormat('es-CL', {
+  style: 'currency',
+  currency: 'CLP',
+  maximumFractionDigits: 0
+});
+
+function formatMoney(value) {
+  return moneyFormatter.format(Number(value || 0));
+}
+
+function formatDateValue(value) {
+  if (!value) {
+    return 'Sin fecha';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleDateString('es-CL');
+}
+
+function buildInventoryRow(record) {
+  const data = record.data || {};
+  const quantity = Number(data.quantity || 0);
+  const purchaseValue = Number(data.purchaseValue || 0);
+  const saleValue = Number(data.saleValue || 0);
+  const marketValue = Number(data.marketValue || 0);
+  const expiryDate = data.expiryDate || '';
+  const entryDate = data.entryDate || '';
+  const today = new Date();
+  const parsedExpiry = expiryDate ? new Date(expiryDate) : null;
+  const daysToExpiry = parsedExpiry && !Number.isNaN(parsedExpiry.getTime())
+    ? Math.ceil((parsedExpiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const investmentTotal = Number((quantity * purchaseValue).toFixed(2));
+  const incomeTotal = Number((quantity * saleValue).toFixed(2));
+  const marketTotal = Number((quantity * marketValue).toFixed(2));
+  const isLowStock = quantity <= 20;
+  const isExpired = daysToExpiry !== null && daysToExpiry < 0;
+  const isExpiringSoon = daysToExpiry !== null && daysToExpiry >= 0 && daysToExpiry <= 30;
+
+  return {
+    ...record,
+    product: data.product || '',
+    purchaseValue,
+    saleValue,
+    expiryDate,
+    entryDate,
+    quantity,
+    marketValue,
+    investmentTotal,
+    incomeTotal,
+    marketTotal,
+    projectedMargin: Number((incomeTotal - investmentTotal).toFixed(2)),
+    daysToExpiry,
+    isLowStock,
+    isExpired,
+    isExpiringSoon
+  };
 }
 
 function LoginScreen({ onLogin }) {
@@ -227,7 +292,7 @@ function SettingsPanel({ settings, saveSettings, adminUser, saveAdmin }) {
 function AppShell() {
   const [activeView, setActiveView] = useState('home');
   const [summary, setSummary] = useState(null);
-  const [dashboardData, setDashboardData] = useState({ products: [], sales: [], suppliers: [], product_values: [], reports: [] });
+  const [dashboardData, setDashboardData] = useState({ products: [], sales: [], suppliers: [], product_values: [], inventory_control: [], reports: [] });
   const [records, setRecords] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [forms, setForms] = useState(getInitialForms());
@@ -308,15 +373,16 @@ function AppShell() {
   }
 
   async function loadDashboardData() {
-    const [products, sales, suppliers, productValues, reports] = await Promise.all([
+    const [products, sales, suppliers, productValues, inventoryControl, reports] = await Promise.all([
       apiJson('/api/modules/products/records'),
       apiJson('/api/modules/sales/records'),
       apiJson('/api/modules/suppliers/records'),
       apiJson('/api/modules/product_values/records'),
+      apiJson('/api/modules/inventory_control/records'),
       apiJson('/api/modules/reports/records')
     ]);
 
-    setDashboardData({ products, sales, suppliers, product_values: productValues, reports });
+    setDashboardData({ products, sales, suppliers, product_values: productValues, inventory_control: inventoryControl, reports });
   }
 
   async function loadRecords(moduleKey = activeView) {
@@ -371,6 +437,7 @@ function AppShell() {
     return [
       { label: 'Productos', value: summary.modules.products || 0 },
       { label: 'Proveedores', value: summary.modules.suppliers || 0 },
+      { label: 'Inventario', value: summary.modules.inventory_control || 0 },
       { label: 'Ventas', value: summary.modules.sales || 0 },
       { label: 'Reportes', value: summary.modules.reports || 0 },
       { label: 'Documentos', value: summary.documents || 0 },
@@ -539,6 +606,92 @@ function AppShell() {
       }
     };
   }, [dashboardData, chartFilters]);
+
+  const inventoryRows = useMemo(() => records.map(buildInventoryRow), [records]);
+
+  const [inventoryFilters, setInventoryFilters] = useState({ query: '', status: 'all', expiry: 'all', sort: 'expiryDate' });
+
+  const visibleInventoryRows = useMemo(() => {
+    const now = new Date();
+    const soonThreshold = 30;
+
+    const filtered = inventoryRows.filter((row) => {
+      const query = inventoryFilters.query.trim().toLowerCase();
+      const matchesQuery = !query || [row.product, row.notes].some((value) => String(value || '').toLowerCase().includes(query));
+      const isLowStock = Number(row.quantity || 0) <= 20;
+      const expiryDate = row.expiryDate ? new Date(row.expiryDate) : null;
+      const daysToExpiry = expiryDate && !Number.isNaN(expiryDate.getTime())
+        ? Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+      const isExpiringSoon = daysToExpiry !== null && daysToExpiry <= soonThreshold && daysToExpiry >= 0;
+      const isExpired = daysToExpiry !== null && daysToExpiry < 0;
+
+      const matchesStatus = inventoryFilters.status === 'all'
+        || (inventoryFilters.status === 'low_stock' && isLowStock)
+        || (inventoryFilters.status === 'healthy' && !isLowStock)
+        || (inventoryFilters.status === 'expired' && isExpired)
+        || (inventoryFilters.status === 'soon' && isExpiringSoon);
+
+      const matchesExpiry = inventoryFilters.expiry === 'all'
+        || (inventoryFilters.expiry === 'expired' && isExpired)
+        || (inventoryFilters.expiry === 'soon' && isExpiringSoon)
+        || (inventoryFilters.expiry === 'fresh' && daysToExpiry !== null && daysToExpiry > soonThreshold)
+        || (inventoryFilters.expiry === 'no_date' && !expiryDate);
+
+      return matchesQuery && matchesStatus && matchesExpiry;
+    });
+
+    const sorters = {
+      expiryDate: (a, b) => String(a.expiryDate || '9999-12-31').localeCompare(String(b.expiryDate || '9999-12-31')),
+      quantity: (a, b) => Number(a.quantity || 0) - Number(b.quantity || 0),
+      marketValue: (a, b) => Number(b.marketValue || 0) - Number(a.marketValue || 0)
+    };
+
+    return [...filtered].sort(sorters[inventoryFilters.sort] || sorters.expiryDate);
+  }, [inventoryRows, inventoryFilters]);
+
+  const inventorySummary = useMemo(() => {
+    return inventoryRows.reduce((accumulator, row) => {
+      accumulator.count += 1;
+      accumulator.quantity += Number(row.quantity || 0);
+      accumulator.investmentTotal += Number(row.investmentTotal || 0);
+      accumulator.incomeTotal += Number(row.incomeTotal || 0);
+      accumulator.marketTotal += Number(row.marketTotal || 0);
+      return accumulator;
+    }, {
+      count: 0,
+      quantity: 0,
+      investmentTotal: 0,
+      incomeTotal: 0,
+      marketTotal: 0
+    });
+  }, [inventoryRows]);
+
+  const inventoryAlerts = useMemo(() => {
+    const now = new Date();
+    const soonDays = 30;
+    const lowStock = inventoryRows.filter((row) => Number(row.quantity || 0) <= 20);
+    const expiringSoon = inventoryRows.filter((row) => {
+      if (!row.expiryDate) return false;
+      const date = new Date(row.expiryDate);
+      if (Number.isNaN(date.getTime())) return false;
+      const diff = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return diff >= 0 && diff <= soonDays;
+    });
+    const expired = inventoryRows.filter((row) => {
+      if (!row.expiryDate) return false;
+      const date = new Date(row.expiryDate);
+      return !Number.isNaN(date.getTime()) && date.getTime() < now.getTime();
+    });
+    const highestInvestment = inventoryRows.reduce((top, row) => (Number(row.investmentTotal || 0) > Number(top?.investmentTotal || 0) ? row : top), null);
+
+    return {
+      lowStock,
+      expiringSoon,
+      expired,
+      highestInvestment
+    };
+  }, [inventoryRows]);
 
   function ShoppingIllustration() {
     return (
@@ -1043,8 +1196,269 @@ function AppShell() {
     );
   }
 
+  function handleInventoryPdfExport() {
+    const columns = [
+      'Producto',
+      'Compra',
+      'Venta',
+      'Caducidad',
+      'Ingreso',
+      'Cantidad',
+      'Mercado',
+      'Inversión',
+      'Ingreso estimado',
+      'Margen'
+    ];
+
+    const rows = visibleInventoryRows.map((row) => ([
+      row.product || 'Producto',
+      formatMoney(row.purchaseValue),
+      formatMoney(row.saleValue),
+      formatDateValue(row.expiryDate),
+      formatDateValue(row.entryDate),
+      String(row.quantity || 0),
+      formatMoney(row.marketValue),
+      formatMoney(row.investmentTotal),
+      formatMoney(row.incomeTotal),
+      formatMoney(row.projectedMargin)
+    ]));
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    doc.setFillColor(16, 26, 44);
+    doc.roundedRect(28, 24, pageWidth - 56, 74, 14, 14, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.text('Reporte de control de inventario', 44, 52);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text('Listado para control de compra, venta, caducidad, ingreso y valor de mercado.', 44, 70);
+    doc.text(`Generado: ${new Date().toLocaleString('es-CL')}`, 44, 88);
+
+    doc.setTextColor(15, 23, 32);
+    autoTable(doc, {
+      startY: 112,
+      body: [[
+        `Registros: ${inventorySummary.count}`,
+        `Unidades: ${inventorySummary.quantity}`,
+        `Inversión: ${formatMoney(inventorySummary.investmentTotal)}`,
+        `Ingreso estimado: ${formatMoney(inventorySummary.incomeTotal)}`,
+        `Valor de mercado: ${formatMoney(inventorySummary.marketTotal)}`
+      ]],
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 5, halign: 'center', valign: 'middle' },
+      bodyStyles: { fillColor: [244, 247, 255], textColor: [15, 23, 32], fontStyle: 'bold' },
+      tableLineColor: [220, 228, 241],
+      tableLineWidth: 0.6,
+      margin: { left: 40, right: 40 }
+    });
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 16,
+      head: [columns],
+      body: rows,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 4, valign: 'middle' },
+      headStyles: { fillColor: [16, 26, 44], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [247, 250, 255] },
+      margin: { left: 40, right: 40 }
+    });
+
+    const footerY = doc.internal.pageSize.getHeight() - 24;
+    doc.setFontSize(9);
+    doc.setTextColor(92, 106, 138);
+    doc.text('Prototipo Innovacion · Control local de inventario', 40, footerY);
+    doc.text(`Pagina ${doc.getNumberOfPages()}`, pageWidth - 40, footerY, { align: 'right' });
+
+    doc.save(`inventario-${Date.now()}.pdf`);
+  }
+
+  function renderInventoryControlView(config) {
+    const tableRows = visibleInventoryRows;
+
+    return (
+      <>
+        <p className="module-plain-description">{config.subtitle}</p>
+
+        <section className="module-layout inventory-layout">
+          <form className="card module-form" onSubmit={(event) => handleModuleSubmit(config.key, event)}>
+            <div className="card-header">
+              <div>
+                <p className="card-title">{editingId ? 'Editar registro de inventario' : config.actionLabel}</p>
+              </div>
+              <span className="badge accent">{config.label}</span>
+            </div>
+
+            <div className="form-grid">{config.fields.map((field) => renderField(config.key, field))}</div>
+
+            {error ? <p className="error-message">{error}</p> : null}
+
+            <div className="button-row">
+              <button type="submit" className="primary">
+                {editingId ? 'Guardar cambios' : config.actionLabel}
+              </button>
+              <button type="button" className="secondary" onClick={() => clearModuleForm(config.key)}>
+                Limpiar
+              </button>
+              <button type="button" className="secondary" onClick={() => handleExport(config.key)}>
+                Descargar Excel
+              </button>
+              <button type="button" className="secondary" onClick={handleInventoryPdfExport}>
+                Descargar PDF
+              </button>
+              <label className="secondary file-button">
+                Cargar Excel
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(event) => handleImport(config.key, event.target.files?.[0])}
+                />
+              </label>
+            </div>
+          </form>
+
+          <section className="card record-list inventory-record-list">
+            <div className="card-header">
+              <div>
+                <p className="card-title">{config.listLabel}</p>
+                <p className="card-subtitle">Tabla completa con costos, precios, caducidad, ingreso y valores resumidos.</p>
+              </div>
+              <span className="badge accent">{tableRows.length} registros</span>
+            </div>
+
+            <div className="inventory-filter-bar">
+              <label>
+                Buscar
+                <input
+                  value={inventoryFilters.query}
+                  onChange={(event) => setInventoryFilters((current) => ({ ...current, query: event.target.value }))}
+                  placeholder="Producto, nota o lote"
+                />
+              </label>
+              <label>
+                Estado
+                <select value={inventoryFilters.status} onChange={(event) => setInventoryFilters((current) => ({ ...current, status: event.target.value }))}>
+                  <option value="all">Todos</option>
+                  <option value="healthy">Stock normal</option>
+                  <option value="low_stock">Stock bajo</option>
+                  <option value="soon">Caduca pronto</option>
+                  <option value="expired">Vencido</option>
+                </select>
+              </label>
+              <label>
+                Caducidad
+                <select value={inventoryFilters.expiry} onChange={(event) => setInventoryFilters((current) => ({ ...current, expiry: event.target.value }))}>
+                  <option value="all">Todas</option>
+                  <option value="fresh">Lejana</option>
+                  <option value="soon">Próxima</option>
+                  <option value="expired">Vencida</option>
+                  <option value="no_date">Sin fecha</option>
+                </select>
+              </label>
+              <label>
+                Orden
+                <select value={inventoryFilters.sort} onChange={(event) => setInventoryFilters((current) => ({ ...current, sort: event.target.value }))}>
+                  <option value="expiryDate">Caducidad</option>
+                  <option value="quantity">Cantidad</option>
+                  <option value="marketValue">Valor de mercado</option>
+                </select>
+              </label>
+              <button type="button" className="secondary" onClick={() => setInventoryFilters({ query: '', status: 'all', expiry: 'all', sort: 'expiryDate' })}>
+                Limpiar filtros
+              </button>
+            </div>
+
+            <p className="inventory-metrics-note">Aquí puedes revisar qué compraste, cuánto te cuesta realmente, cuánto podrías ingresar y si el stock queda corto o de más.</p>
+
+            <div className="inventory-summary-grid">
+              <div className="summary-tile">
+                <span>Inversión total</span>
+                <strong>{formatMoney(inventorySummary.investmentTotal)}</strong>
+              </div>
+              <div className="summary-tile">
+                <span>Ingreso estimado</span>
+                <strong>{formatMoney(inventorySummary.incomeTotal)}</strong>
+              </div>
+              <div className="summary-tile">
+                <span>Valor de mercado</span>
+                <strong>{formatMoney(inventorySummary.marketTotal)}</strong>
+              </div>
+              <div className="summary-tile">
+                <span>Unidades totales</span>
+                <strong>{inventorySummary.quantity}</strong>
+              </div>
+            </div>
+
+            {loading ? <p className="muted">Cargando inventario...</p> : null}
+
+            {!loading && tableRows.length === 0 ? <p className="muted">Aun no hay registros de inventario.</p> : null}
+
+            {!loading && tableRows.length > 0 ? (
+              <div className="inventory-table-wrap">
+                <table className="inventory-table">
+                  <thead>
+                    <tr>
+                      <th>Producto</th>
+                      <th>Compra</th>
+                      <th>Venta</th>
+                      <th>Caducidad</th>
+                      <th>Ingreso</th>
+                      <th>Cantidad</th>
+                      <th>Mercado</th>
+                      <th>Inversión</th>
+                      <th>Ingreso estimado</th>
+                      <th>Margen</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.map((row) => (
+                      <tr key={row.id} className={row.isExpired ? 'inventory-row-expired' : row.isExpiringSoon ? 'inventory-row-soon' : row.isLowStock ? 'inventory-row-low' : ''}>
+                        <td>
+                          <strong>{row.product || 'Producto'}</strong>
+                          <span className="muted">ID {row.id}</span>
+                        </td>
+                        <td>{formatMoney(row.purchaseValue)}</td>
+                        <td>{formatMoney(row.saleValue)}</td>
+                        <td>{formatDateValue(row.expiryDate)}</td>
+                        <td>{formatDateValue(row.entryDate)}</td>
+                        <td>{row.quantity}</td>
+                        <td>{formatMoney(row.marketValue)}</td>
+                        <td>{formatMoney(row.investmentTotal)}</td>
+                        <td>{formatMoney(row.incomeTotal)}</td>
+                        <td>{formatMoney(row.projectedMargin)}</td>
+                        <td>
+                          <div className="row-actions">
+                            <span className={`inventory-status ${row.isExpired ? 'danger' : row.isExpiringSoon ? 'warning' : row.isLowStock ? 'warning' : 'ok'}`}>
+                              {row.isExpired ? 'Vencido' : row.isExpiringSoon ? 'Caduca pronto' : row.isLowStock ? 'Stock bajo' : 'Normal'}
+                            </span>
+                            <button type="button" className="text-button" onClick={() => startEditRecord(config.key, row)}>
+                              Editar
+                            </button>
+                            <button type="button" className="text-button danger" onClick={() => handleDeleteRecord(config.key, row.id)}>
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </section>
+        </section>
+      </>
+    );
+  }
+
   function renderModuleRecords(moduleKey) {
     const config = getModuleConfig(moduleKey);
+
+    if (moduleKey === 'inventory_control') {
+      return renderInventoryControlView(config);
+    }
 
     return (
       <>
@@ -1135,7 +1549,7 @@ function AppShell() {
   }
 
   function renderDocumentsView() {
-    const moduleOptions = MODULE_ORDER.filter((moduleKey) => ['products', 'suppliers', 'product_values', 'sales', 'reports'].includes(moduleKey));
+    const moduleOptions = MODULE_ORDER.filter((moduleKey) => ['products', 'suppliers', 'product_values', 'inventory_control', 'sales', 'reports'].includes(moduleKey));
 
     return (
       <>
@@ -1265,6 +1679,39 @@ function AppShell() {
         <p className="module-plain-description">{getModuleConfig('dashboard').subtitle}</p>
 
         <section className="dashboard-layout clean-dashboard">
+          <section className="card dashboard-alerts-panel">
+            <div className="card-header">
+              <div>
+                <p className="card-title">Alertas de inventario</p>
+                <p className="card-subtitle">Señales rápidas para evitar compras de más, compras de menos y vencimientos.</p>
+              </div>
+              <span className="badge accent">Control</span>
+            </div>
+
+            <div className="alert-grid">
+              <article className="alert-card danger">
+                <span>Vencidos</span>
+                <strong>{inventoryAlerts.expired.length}</strong>
+                <p>{inventoryAlerts.expired[0]?.product ? `Revisar ${inventoryAlerts.expired[0].product}` : 'Sin productos vencidos detectados.'}</p>
+              </article>
+              <article className="alert-card warning">
+                <span>Caducan en 30 días</span>
+                <strong>{inventoryAlerts.expiringSoon.length}</strong>
+                <p>{inventoryAlerts.expiringSoon[0]?.product ? `Priorizar ${inventoryAlerts.expiringSoon[0].product}` : 'No hay productos próximos a vencer.'}</p>
+              </article>
+              <article className="alert-card warning">
+                <span>Stock bajo</span>
+                <strong>{inventoryAlerts.lowStock.length}</strong>
+                <p>{inventoryAlerts.lowStock[0]?.product ? `Falta reponer ${inventoryAlerts.lowStock[0].product}` : 'El stock se ve estable.'}</p>
+              </article>
+              <article className="alert-card">
+                <span>Mayor inversión</span>
+                <strong>{inventoryAlerts.highestInvestment ? formatMoney(inventoryAlerts.highestInvestment.investmentTotal) : formatMoney(0)}</strong>
+                <p>{inventoryAlerts.highestInvestment?.product ? inventoryAlerts.highestInvestment.product : 'No hay registros de inversión.'}</p>
+              </article>
+            </div>
+          </section>
+
           <section className="dashboard-charts card">
           <div className="card-header charts-header">
             <div>

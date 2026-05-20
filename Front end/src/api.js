@@ -1,5 +1,11 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : 'http://localhost:3001');
+
+function resolveApiUrl(path) {
+  return API_BASE_URL ? new URL(path, API_BASE_URL).toString() : path;
+}
+
 export async function apiJson(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(resolveApiUrl(path), {
     headers: {
       'Content-Type': 'application/json',
       ...(options.headers || {})
@@ -20,7 +26,7 @@ export async function apiJson(path, options = {}) {
 }
 
 export async function downloadFile(path, filename) {
-  const response = await fetch(path);
+  const response = await fetch(resolveApiUrl(path));
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
@@ -37,7 +43,7 @@ export async function downloadFile(path, filename) {
 }
 
 export async function uploadFormData(path, formData) {
-  const response = await fetch(path, {
+  const response = await fetch(resolveApiUrl(path), {
     method: 'POST',
     body: formData
   });

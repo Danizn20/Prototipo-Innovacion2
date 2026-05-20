@@ -17,8 +17,9 @@ param(
 function Write-Err($msg) { Write-Host "ERROR: $msg" -ForegroundColor Red }
 function Write-Ok($msg) { Write-Host "INFO: $msg" -ForegroundColor Green }
 
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
-Push-Location $root
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path -Parent $scriptDir
+Push-Location $repoRoot
 
 if (-not (Test-Path "Front end/src-tauri")) {
   Write-Err "This script must be run from the repository root (where 'Front end' exists)."; exit 1
@@ -65,8 +66,13 @@ Pop-Location
 
 # Build frontend
 Push-Location "Front end"
-Write-Ok "Installing frontend deps and building"
-npm ci
+Write-Ok "Preparing frontend build"
+if (-not (Test-Path "node_modules/.bin/vite.cmd")) {
+  Write-Ok "Frontend dependencies missing; installing them now"
+  npm install --no-audit --no-fund
+} else {
+  Write-Ok "Frontend dependencies already present; skipping reinstall"
+}
 npm run build
 Pop-Location
 

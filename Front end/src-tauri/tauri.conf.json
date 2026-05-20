@@ -20,8 +20,9 @@
     ]
     ,
     "bundle": {
+      "identifier": "com.prototipoinnovacion.app",
       "resources": [
-        "../Backend",
+        "../../Backend",
         "bundled/node"
       ]
     }
