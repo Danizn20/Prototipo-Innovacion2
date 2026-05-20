@@ -299,6 +299,8 @@ function AppShell() {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sessionHasChanges, setSessionHasChanges] = useState(false);
+  const [dayClosePrepared, setDayClosePrepared] = useState(false);
   const [documentForm, setDocumentForm] = useState({ module: 'products', record_id: '', description: '', file: null });
   const [chartMode, setChartMode] = useState('bar');
   const CHART_FILTERS_KEY = 'prototipo_chart_filters';
@@ -355,6 +357,21 @@ function AppShell() {
     document.documentElement.style.fontSize = sizeMap[settings.fontSize] || '16px';
   }, [settings]);
 
+  useEffect(() => {
+    const onBeforeUnload = (event) => {
+      if (!sessionHasChanges || dayClosePrepared) {
+        return;
+      }
+
+      event.preventDefault();
+      event.returnValue = 'Tienes cambios del dia sin cierre. Usa "Cierre del dia" para exportar PDF y Excel antes de salir.';
+      return event.returnValue;
+    };
+
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [sessionHasChanges, dayClosePrepared]);
+
   function saveSettings(next) {
     const updated = { ...settings, ...next };
     setSettings(updated);
@@ -383,6 +400,23 @@ function AppShell() {
     ]);
 
     setDashboardData({ products, sales, suppliers, product_values: productValues, inventory_control: inventoryControl, reports });
+  }
+
+  function computeInventorySummaryFromRows(rows) {
+    return rows.reduce((accumulator, row) => {
+      accumulator.count += 1;
+      accumulator.quantity += Number(row.quantity || 0);
+      accumulator.investmentTotal += Number(row.investmentTotal || 0);
+      accumulator.incomeTotal += Number(row.incomeTotal || 0);
+      accumulator.marketTotal += Number(row.marketTotal || 0);
+      return accumulator;
+    }, {
+      count: 0,
+      quantity: 0,
+      investmentTotal: 0,
+      incomeTotal: 0,
+      marketTotal: 0
+    });
   }
 
   async function loadRecords(moduleKey = activeView) {
@@ -775,24 +809,27 @@ function AppShell() {
     }
 
     async function exportBarAsPng() {
-      // generate a simple SVG representation of the bar chart
       const w = 900;
       const h = 420;
       const padding = 60;
       const innerW = w - padding * 2;
       const innerH = h - padding * 2;
       const maxV = Math.max(...data.map((d) => Number(d.value || 0)), 1);
+      const totalV = data.reduce((accumulator, item) => accumulator + Number(item.value || 0), 0) || 1;
       const barW = innerW / data.length - 12;
       let bars = '';
       data.forEach((item, i) => {
         const bw = barW;
         const x = padding + i * (bw + 12);
-        const height = Math.max((Number(item.value || 0) / maxV) * innerH, 2);
-        const y = padding + (innerH - height);
-        bars += `<rect x="${x}" y="${y}" width="${bw}" height="${height}" fill="${item.color || '#ccc'}" rx="8"/>`;
-        bars += `<text x="${x + bw/2}" y="${padding + innerH + 20}" font-size="14" text-anchor="middle" fill="#eaf0ff">${item.label}</text>`;
+        const value = Number(item.value || 0);
+        const pct = Math.round((value / totalV) * 100);
+        const barHeight = Math.max((value / maxV) * innerH, 2);
+        const y = padding + (innerH - barHeight);
+        bars += `<rect x="${x}" y="${y}" width="${bw}" height="${barHeight}" fill="${item.color || '#ccc'}" rx="8"/>`;
+        bars += `<text x="${x + bw / 2}" y="${Math.max(y - 10, 20)}" font-size="13" font-weight="700" text-anchor="middle" fill="#ffffff">${value} (${pct}%)</text>`;
+        bars += `<text x="${x + bw / 2}" y="${padding + innerH + 20}" font-size="14" text-anchor="middle" fill="#eaf0ff">${item.label}</text>`;
       });
-      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><rect width='100%' height='100%' fill='#071226'/><g>${bars}</g></svg>`;
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><rect width='100%' height='100%' fill='#071226'/><text x='${padding}' y='32' font-size='18' font-weight='700' fill='#ffffff'>Grafico de barras - Total: ${totalV}</text><g>${bars}</g></svg>`;
       await exportSvgStringToPng(svg, `barras-${Date.now()}.png`, w, h);
     }
     const total = data.reduce((accumulator, item) => accumulator + Number(item.value || 0), 0);
@@ -845,9 +882,34 @@ function AppShell() {
     const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, text: '' });
 
     async function exportLineAsPng() {
-      if (!svgRef.current) return;
-      const svgString = svgRef.current.outerHTML;
-      await exportSvgStringToPng(svgString, `linea-${Date.now()}.png`, width, height);
+      const w = 900;
+      const h = 420;
+      const exportPadding = 70;
+      const innerW = w - exportPadding * 2;
+      const innerH = h - exportPadding * 2;
+      const totalV = data.reduce((accumulator, item) => accumulator + Number(item.value || 0), 0) || 1;
+      const maxV = Math.max(...data.map((item) => Number(item.value || 0)), 1);
+      const xStep = data.length > 1 ? innerW / (data.length - 1) : 0;
+
+      const pathPoints = data.map((item, index) => {
+        const x = exportPadding + (index * xStep);
+        const y = exportPadding + innerH - ((Number(item.value || 0) / maxV) * innerH);
+        return `${x},${y}`;
+      });
+
+      let pointsLayer = '';
+      data.forEach((item, index) => {
+        const x = exportPadding + (index * xStep);
+        const y = exportPadding + innerH - ((Number(item.value || 0) / maxV) * innerH);
+        const value = Number(item.value || 0);
+        const pct = Math.round((value / totalV) * 100);
+        pointsLayer += `<circle cx='${x}' cy='${y}' r='6' fill='#ffb64d' stroke='#ffffff' stroke-width='2'/>`;
+        pointsLayer += `<text x='${x}' y='${Math.max(y - 12, 24)}' font-size='12' font-weight='700' text-anchor='middle' fill='#ffffff'>${value} (${pct}%)</text>`;
+        pointsLayer += `<text x='${x}' y='${h - 24}' font-size='12' text-anchor='middle' fill='#dbe7ff'>${item.label}</text>`;
+      });
+
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><rect width='100%' height='100%' fill='#071226'/><text x='${exportPadding}' y='34' font-size='18' font-weight='700' fill='#ffffff'>Grafico de linea - Total: ${totalV}</text><polyline points='${pathPoints.join(' ')}' fill='none' stroke='url(#lineExportGradient)' stroke-width='4'/><defs><linearGradient id='lineExportGradient' x1='0' x2='1' y1='0' y2='0'><stop offset='0%' stop-color='#ffb64d'/><stop offset='100%' stop-color='#4ea7ff'/></linearGradient></defs>${pointsLayer}</svg>`;
+      await exportSvgStringToPng(svg, `linea-${Date.now()}.png`, w, h);
     }
 
     function onPointHover(e, item) {
@@ -917,9 +979,28 @@ function AppShell() {
     const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, text: '' });
 
     async function exportPieAsPng() {
-      if (!svgRef.current) return;
-      const svgString = svgRef.current.outerHTML;
-      await exportSvgStringToPng(svgString, `torta-${Date.now()}.png`, 260, 260);
+      const w = 700;
+      const h = 420;
+      const cx = 180;
+      const cy = 210;
+      const r = 110;
+      const totalV = data.reduce((accumulator, item) => accumulator + Number(item.value || 0), 0) || 1;
+      const circumference = 2 * Math.PI * r;
+      let strokeOffset = circumference;
+      let slices = '';
+      let legend = '';
+
+      data.forEach((item, index) => {
+        const value = Number(item.value || 0);
+        const pct = Math.round((value / totalV) * 100);
+        const dash = (value / totalV) * circumference;
+        slices += `<circle cx='${cx}' cy='${cy}' r='${r}' fill='none' stroke='${item.color || '#ccc'}' stroke-width='46' stroke-dasharray='${dash} ${circumference - dash}' stroke-dashoffset='${strokeOffset}'/>`;
+        strokeOffset -= dash;
+        legend += `<rect x='390' y='${100 + (index * 40)}' width='16' height='16' rx='4' fill='${item.color || '#ccc'}'/><text x='414' y='${113 + (index * 40)}' font-size='13' fill='#ffffff'>${item.label}: ${value} (${pct}%)</text>`;
+      });
+
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><rect width='100%' height='100%' fill='#071226'/><text x='42' y='34' font-size='18' font-weight='700' fill='#ffffff'>Grafico de torta - Total: ${totalV}</text><circle cx='${cx}' cy='${cy}' r='${r}' fill='none' stroke='#10203d' stroke-width='46'/>${slices}<text x='${cx}' y='${cy - 4}' text-anchor='middle' font-size='24' font-weight='700' fill='#ffffff'>${totalV}</text><text x='${cx}' y='${cy + 20}' text-anchor='middle' font-size='12' fill='#dbe7ff'>Total</text>${legend}</svg>`;
+      await exportSvgStringToPng(svg, `torta-${Date.now()}.png`, w, h);
     }
 
     function onSegmentHover(e, item) {
@@ -934,6 +1015,9 @@ function AppShell() {
         <div className="chart-title-row">
           <strong>Torta</strong>
           <span>Participacion porcentual</span>
+          <div style={{ marginLeft: 12 }}>
+            <button type="button" className="export-btn" onClick={exportPieAsPng}>Exportar</button>
+          </div>
         </div>
         <div className="pie-layout">
           <svg ref={svgRef} viewBox="0 0 220 220" className="pie-chart">
@@ -1064,6 +1148,9 @@ function AppShell() {
         });
       }
 
+      setSessionHasChanges(true);
+      setDayClosePrepared(false);
+
       clearModuleForm(moduleKey);
       await refreshCurrentView();
     } catch (requestError) {
@@ -1079,6 +1166,8 @@ function AppShell() {
 
       try {
         await apiJson(`/api/documents/${id}`, { method: 'DELETE' });
+        setSessionHasChanges(true);
+        setDayClosePrepared(false);
         await refreshCurrentView();
       } catch (requestError) {
         setError(requestError.message);
@@ -1093,6 +1182,8 @@ function AppShell() {
 
     try {
       await apiJson(`/api/modules/${moduleKey}/records/${id}`, { method: 'DELETE' });
+      setSessionHasChanges(true);
+      setDayClosePrepared(false);
       await refreshCurrentView();
     } catch (requestError) {
       setError(requestError.message);
@@ -1117,6 +1208,8 @@ function AppShell() {
 
     try {
       await uploadFormData(`/api/modules/${moduleKey}/import`, formData);
+      setSessionHasChanges(true);
+      setDayClosePrepared(false);
       await refreshCurrentView();
     } catch (requestError) {
       setError(requestError.message);
@@ -1139,6 +1232,8 @@ function AppShell() {
 
     try {
       await uploadFormData('/api/documents', formData);
+      setSessionHasChanges(true);
+      setDayClosePrepared(false);
       setDocumentForm({ module: documentForm.module, record_id: '', description: '', file: null });
       await refreshCurrentView();
     } catch (requestError) {
@@ -1196,7 +1291,7 @@ function AppShell() {
     );
   }
 
-  function handleInventoryPdfExport() {
+  function handleInventoryPdfExport(customRows, customSummary) {
     const columns = [
       'Producto',
       'Compra',
@@ -1210,7 +1305,9 @@ function AppShell() {
       'Margen'
     ];
 
-    const rows = visibleInventoryRows.map((row) => ([
+    const rowsSource = customRows || visibleInventoryRows;
+    const summarySource = customSummary || inventorySummary;
+    const rows = rowsSource.map((row) => ([
       row.product || 'Producto',
       formatMoney(row.purchaseValue),
       formatMoney(row.saleValue),
@@ -1240,11 +1337,11 @@ function AppShell() {
     autoTable(doc, {
       startY: 112,
       body: [[
-        `Registros: ${inventorySummary.count}`,
-        `Unidades: ${inventorySummary.quantity}`,
-        `Inversión: ${formatMoney(inventorySummary.investmentTotal)}`,
-        `Ingreso estimado: ${formatMoney(inventorySummary.incomeTotal)}`,
-        `Valor de mercado: ${formatMoney(inventorySummary.marketTotal)}`
+        `Registros: ${summarySource.count}`,
+        `Unidades: ${summarySource.quantity}`,
+        `Inversión: ${formatMoney(summarySource.investmentTotal)}`,
+        `Ingreso estimado: ${formatMoney(summarySource.incomeTotal)}`,
+        `Valor de mercado: ${formatMoney(summarySource.marketTotal)}`
       ]],
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 5, halign: 'center', valign: 'middle' },
@@ -1272,6 +1369,23 @@ function AppShell() {
     doc.text(`Pagina ${doc.getNumberOfPages()}`, pageWidth - 40, footerY, { align: 'right' });
 
     doc.save(`inventario-${Date.now()}.pdf`);
+  }
+
+  async function handleDayCloseExport() {
+    try {
+      const inventoryRaw = await apiJson('/api/modules/inventory_control/records');
+      const inventoryBuilt = inventoryRaw.map(buildInventoryRow);
+      const summaryBuilt = computeInventorySummaryFromRows(inventoryBuilt);
+
+      await downloadFile('/api/modules/inventory_control/export', `inventario-cierre-${Date.now()}.xlsx`);
+      handleInventoryPdfExport(inventoryBuilt, summaryBuilt);
+
+      setDayClosePrepared(true);
+      setSessionHasChanges(false);
+      alert('Cierre del dia completado: se exportaron Excel y PDF.');
+    } catch (requestError) {
+      setError(requestError.message || 'No fue posible completar el cierre del dia.');
+    }
   }
 
   function renderInventoryControlView(config) {
@@ -1869,7 +1983,12 @@ function AppShell() {
             <p className="card-title">{activeModule?.title}</p>
             <p className="card-subtitle">{activeModule?.subtitle}</p>
           </div>
-          <span className="badge accent">Sesion activa</span>
+          <div className="topbar-actions">
+            <button type="button" className="primary" onClick={handleDayCloseExport}>Cierre del dia (Excel + PDF)</button>
+            <span className={`badge ${dayClosePrepared ? 'success' : 'accent'}`}>
+              {dayClosePrepared ? 'Cierre listo' : 'Sesion activa'}
+            </span>
+          </div>
         </header>
 
         {error ? <p className="error-banner">{error}</p> : null}

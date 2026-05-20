@@ -59,6 +59,11 @@ db.exec(`
     description TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS app_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `);
 
 persistDatabase();
@@ -136,7 +141,20 @@ function seedModule(moduleName, records) {
   persistDatabase();
 }
 
-Object.entries(moduleSeeds).forEach(([moduleName, records]) => seedModule(moduleName, records));
+const seedMarker = oneRow('SELECT value FROM app_meta WHERE key = ?', ['initial_seed_v1']);
+
+if (!seedMarker) {
+  const totalRows = oneRow('SELECT COUNT(*) AS total FROM module_records')?.total || 0;
+
+  if (totalRows === 0) {
+    Object.entries(moduleSeeds).forEach(([moduleName, records]) => seedModule(moduleName, records));
+  }
+
+  const markerStatement = db.prepare('INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?)');
+  markerStatement.run(['initial_seed_v1', '1']);
+  markerStatement.free();
+  persistDatabase();
+}
 
 function parseData(row) {
   return {

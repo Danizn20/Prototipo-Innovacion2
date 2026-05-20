@@ -1,5 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 fn find_resource_file(start: &Path, file_name: &str) -> Option<PathBuf> {
   if !start.exists() {
@@ -67,12 +69,19 @@ fn try_spawn_bundled_node_runner(app_handle: &tauri::AppHandle) {
       persist_dir.push("PrototipoInnovacion");
 
       // spawn node start-packaged.js
-      match std::process::Command::new(node_path)
+      let mut command = std::process::Command::new(node_path);
+      command
         .arg(start_path)
         .env("PROTOTIPO_DATA_DIR", persist_dir.as_os_str())
-        .env("PROTOTIPO_UPLOADS_DIR", persist_dir.join("uploads"))
-        .spawn()
+        .env("PROTOTIPO_UPLOADS_DIR", persist_dir.join("uploads"));
+
+      #[cfg(target_os = "windows")]
       {
+        // CREATE_NO_WINDOW avoids opening a temporary cmd window for the backend process.
+        command.creation_flags(0x08000000);
+      }
+
+      match command.spawn() {
         Ok(child) => {
           println!("Spawned bundled node runner (pid={})", child.id());
         }
