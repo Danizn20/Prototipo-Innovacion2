@@ -60,9 +60,27 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS sales_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id INTEGER NOT NULL,
+    product_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit_price REAL NOT NULL,
+    total_price REAL NOT NULL,
+    FOREIGN KEY (sale_id) REFERENCES module_records(id)
+  );
+
   CREATE TABLE IF NOT EXISTS app_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS restock_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_name TEXT NOT NULL,
+    quantity_added INTEGER NOT NULL,
+    restock_date TEXT NOT NULL DEFAULT (datetime('now')),
+    notes TEXT
   );
 `);
 
@@ -164,12 +182,37 @@ function parseData(row) {
 }
 
 export function listModuleRecords(moduleName) {
-  return allRows('SELECT * FROM module_records WHERE module = ? ORDER BY datetime(created_at) DESC, id DESC', [moduleName]).map(parseData);
+  const records = allRows('SELECT * FROM module_records WHERE module = ? ORDER BY datetime(created_at) DESC, id DESC', [moduleName]).map(parseData);
+
+  if (moduleName === 'sales') {
+    return records.map(record => {
+      const items = allRows('SELECT * FROM sales_items WHERE sale_id = ?', [record.id]);
+      return { ...record, items };
+    });
+  }
+
+  return records;
 }
 
 export function getModuleRecord(id) {
   const row = oneRow('SELECT * FROM module_records WHERE id = ?', [id]);
-  return row ? parseData(row) : null;
+  if (!row) return null;
+
+  const record = parseData(row);
+  if (record.module === 'sales') {
+    const items = allRows('SELECT * FROM sales_items WHERE sale_id = ?', [id]);
+    return { ...record, items };
+  }
+
+  return record;
+}
+
+export function getModuleRecordByName(moduleName, name) {
+    const row = oneRow(
+        "SELECT * FROM module_records WHERE module = ? AND json_extract(data_json, '$.product') = ?",
+        [moduleName, name]
+    );
+    return row ? parseData(row) : null;
 }
 
 export function createModuleRecord(moduleName, data) {
@@ -195,7 +238,16 @@ export function updateModuleRecord(id, data) {
     SET data_json = ?, updated_at = datetime('now')
     WHERE id = ?
   `);
+record = getModuleRecord(id);
+  if (!record) return;
 
+  if (record.module === 'sales') {
+    const statement = db.prepare('DELETE FROM sales_items WHERE sale_id = ?');
+    statement.run([id]);
+    statement.free();
+  }
+
+  const 
   statement.run([JSON.stringify(data), id]);
   statement.free();
   persistDatabase();

@@ -143,24 +143,16 @@ export const MODULES = {
     subtitle: 'Registro local de ventas y movimientos de caja.',
     actionLabel: 'Guardar venta',
     listLabel: 'Ventas registradas',
-    displayLabel: (record) => `${record.product || 'Venta'} · ${record.customer || 'Cliente general'}`,
+    displayLabel: (record) => `Venta #${record.id} · ${record.customer || 'Cliente general'}`,
     fields: [
       { name: 'date', label: 'Fecha', type: 'date', required: true },
-      { name: 'product', label: 'Producto', type: 'text', placeholder: 'Arroz bolsa 5kg', required: true },
-      { name: 'quantity', label: 'Cantidad', type: 'number', min: 0 },
-      { name: 'unitPrice', label: 'Precio unitario', type: 'number', step: '0.01', min: 0 },
-      { name: 'total', label: 'Total', type: 'number', step: '0.01', min: 0 },
       { name: 'customer', label: 'Cliente', type: 'text', placeholder: 'Mostrador' },
       { name: 'paymentMethod', label: 'Metodo de pago', type: 'select', options: ['Efectivo', 'Transferencia', 'Tarjeta'] },
       { name: 'status', label: 'Estado', type: 'select', options: ['Cerrada', 'Pendiente', 'Anulada'] },
       { name: 'notes', label: 'Observaciones', type: 'textarea', rows: 4, placeholder: 'Factura, promo, comentario...' }
     ],
     defaultValues: {
-      date: '',
-      product: '',
-      quantity: 0,
-      unitPrice: 0,
-      total: 0,
+      date: new Date().toISOString().slice(0, 10),
       customer: '',
       paymentMethod: 'Efectivo',
       status: 'Cerrada',
@@ -220,7 +212,17 @@ export const MODULE_LABELS = {
   settings: 'Configuraciones'
 };
 
-export const MODULE_ORDER = ['home', 'dashboard', 'products', 'suppliers', 'product_values', 'inventory_control', 'sales', 'reports', 'documents', 'settings'];
+export const MODULE_ORDER = [
+  'home',
+  'dashboard',
+  'products',
+  'suppliers',
+  'product_values',
+  'inventory_control',
+  'sales',
+  'documents',
+  'settings'
+];
 
 export function getModuleConfig(moduleKey) {
   return MODULES[moduleKey];

@@ -1,30 +1,40 @@
 {
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Inventario Innovacion",
+  "version": "0.3.0",
+  "identifier": "com.prototipoinnovacion.app",
   "build": {
-    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
     "beforeDevCommand": "npm run dev",
-    "devPath": "../dist",
-    "distDir": "../dist"
+    "beforeBuildCommand": "npm run build"
   },
-  "package": {
-    "productName": "Prototipo Innovacion",
-    "version": "0.1.0"
-  },
-  "tauri": {
+  "app": {
     "windows": [
       {
         "title": "Inventario local de suministros",
         "width": 1280,
         "height": 840,
-        "resizable": true
+        "resizable": true,
+        "fullscreen": false
       }
-    ]
-    ,
-    "bundle": {
-      "identifier": "com.prototipoinnovacion.app",
-      "resources": [
-        "../../Backend",
-        "bundled/node"
-      ]
+    ],
+    "security": {
+      "csp": null
     }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [
+      "../../Backend"
+    ]
   }
 }

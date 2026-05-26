@@ -292,7 +292,7 @@ function SettingsPanel({ settings, saveSettings, adminUser, saveAdmin }) {
 function AppShell() {
   const [activeView, setActiveView] = useState('home');
   const [summary, setSummary] = useState(null);
-  const [dashboardData, setDashboardData] = useState({ products: [], sales: [], suppliers: [], product_values: [], inventory_control: [], reports: [] });
+  const [dashboardData, setDashboardData] = useState({ products: [], sales: [], suppliers: [], product_values: [], inventory_control: [] });
   const [records, setRecords] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [forms, setForms] = useState(getInitialForms());
@@ -390,16 +390,15 @@ function AppShell() {
   }
 
   async function loadDashboardData() {
-    const [products, sales, suppliers, productValues, inventoryControl, reports] = await Promise.all([
+    const [products, sales, suppliers, productValues, inventoryControl] = await Promise.all([
       apiJson('/api/modules/products/records'),
       apiJson('/api/modules/sales/records'),
       apiJson('/api/modules/suppliers/records'),
       apiJson('/api/modules/product_values/records'),
-      apiJson('/api/modules/inventory_control/records'),
-      apiJson('/api/modules/reports/records')
+      apiJson('/api/modules/inventory_control/records')
     ]);
 
-    setDashboardData({ products, sales, suppliers, product_values: productValues, inventory_control: inventoryControl, reports });
+    setDashboardData({ products, sales, suppliers, product_values: productValues, inventory_control: inventoryControl });
   }
 
   function computeInventorySummaryFromRows(rows) {
@@ -474,7 +473,6 @@ function AppShell() {
       { label: 'Inventario', value: summary.modules.inventory_control || 0 },
       { label: 'Ventas', value: summary.modules.sales || 0 },
       { label: 'Reportes', value: summary.modules.reports || 0 },
-      { label: 'Documentos', value: summary.documents || 0 },
       { label: 'Stock bajo', value: summary.lowStock || 0 },
       { label: 'Ventas totales', value: `$${Number(summary.totalSales || 0).toFixed(2)}` }
     ];
@@ -526,16 +524,17 @@ function AppShell() {
     } else if (chartFilters.bar === 'ventas_estado') {
       barData = countBy(sales, (sale) => sale.status || 'Sin estado');
       barLabel = 'Ventas por estado';
-    } else if (chartFilters.bar === 'reportes') {
-      barData = countBy(reports, (r) => r.type || 'Sin tipo');
-      barLabel = 'Reportes por tipo';
     } else {
       // registros por modulo (default)
       barData = [
         { label: 'Productos', value: products.length, color: '#ffb64d' },
         { label: 'Proveedores', value: suppliers.length, color: '#4ea7ff' },
         { label: 'Ventas', value: sales.length, color: '#6ad1ff' },
-        { label: 'Reportes', value: reports.length, color: '#9f7bff' }
+        { label: 'Reportes', value: reports.length, color: '#f5d6c4' },
+        { label: 'Inventario', value: inventoryControl.length, color: '#f2c7ad' },
+        { label: 'Stock bajo', value: inventoryRows.filter(row => Number(row.quantity || 0) <= 20).length, color: '#ff8f4d' },
+        { label: 'Ventas totales', value: summary.totalSales || 0, color: '#ffcf70' },
+        { label: 'Registros', value: records.length, color: '#f5d6c4' },
       ];
       barLabel = 'Registros por módulo';
     }
@@ -1415,6 +1414,9 @@ function AppShell() {
               <button type="button" className="secondary" onClick={() => clearModuleForm(config.key)}>
                 Limpiar
               </button>
+              <button type="button" className="secondary" onClick={() => setRestockModalOpen(true)}>
+                Reabastecimiento
+              </button>
               <button type="button" className="secondary" onClick={() => handleExport(config.key)}>
                 Descargar Excel
               </button>
@@ -1598,8 +1600,14 @@ function AppShell() {
               <button type="button" className="secondary" onClick={() => clearModuleForm(moduleKey)}>
                 Limpiar
               </button>
+              <button type="button" className="secondary" onClick={() => setRestockModalOpen(true)}>
+                Reabastecimiento
+              </button>
               <button type="button" className="secondary" onClick={() => handleExport(moduleKey)}>
                 Descargar Excel
+              </button>
+              <button type="button" className="secondary" onClick={handleInventoryPdfExport}>
+                Descargar PDF
               </button>
               <label className="secondary file-button">
                 Cargar Excel
@@ -1765,8 +1773,7 @@ function AppShell() {
       ],
       line: [
         { value: 'sales_total', label: 'Total vendido por fecha' },
-        { value: 'sales_count', label: 'Cantidad de ventas por fecha' },
-        { value: 'stock_product', label: 'Stock por producto' }
+        { value: 'sales_count', label: 'Cantidad de ventas porcto' }
       ],
       pie: [
         { value: 'product_category', label: 'Productos por categoría' },
@@ -2000,6 +2007,48 @@ function AppShell() {
           <SettingsPanel settings={settings} saveSettings={saveSettings} adminUser={adminUser} saveAdmin={saveAdmin} />
         ) : activeView !== 'home' && activeView !== 'dashboard' && activeView !== 'documents' ? renderModuleRecords(activeView) : null}
       </section>
+
+      {isRestockModalOpen ? (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <form onSubmit={handleRestockSubmit}>
+              <div className="card-header">
+                <div>
+                  <p className="card-title">Reabastecer inventario</p>
+                  <p className="card-subtitle">Selecciona un producto y la cantidad a añadir.</p>
+                </div>
+              </div>
+              <label>
+                Producto
+                <select
+                  value={restockForm.productName}
+                  onChange={(e) => setRestockForm(current => ({ ...current, productName: e.target.value }))
+                >
+                  <option value="">Selecciona un producto</option>
+                  {inventoryRows.map(row => (
+                    <option key={row.id} value={row.product}>{row.product}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Cantidad a añadir
+                <input
+                  type="number"
+                  min="1"
+                  value={restockForm.quantity}
+                  onChange={(e) => setRestockForm(current => ({ ...current, quantity: e.target.value }))}
+                  placeholder="Ej: 50"
+                />
+              </label>
+              {restockMessage ? <p className="muted">{restockMessage}</p> : null}
+              <div className="button-row">
+                <button type="submit" className="primary">Confirmar reabastecimiento</button>
+                <button type="button" className="secondary" onClick={() => setRestockModalOpen(false)}>Cancelar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

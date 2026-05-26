@@ -13,6 +13,7 @@ import {
   flattenRecord,
   getDocument,
   getModuleRecord,
+  getModuleRecordByName,
   getUploadsDir,
   listDocuments,
   listModuleRecords,
@@ -110,8 +111,76 @@ app.get('/api/modules/:module/records', (req, res) => {
 });
 
 app.post('/api/modules/:module/records', (req, res) => {
-  const record = createModuleRecord(req.params.module, req.body || {});
+  const { module } = req.params;
+  const data = req.body || {};
+
+  if (module === 'sales') {
+    const { products, ...saleData } = data;
+
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ message: 'La venta debe incluir al menos un producto.' });
+    }
+
+    // 1. Validar stock para todos los productos
+    for (const item of products) {
+      const inventoryItem = getModuleRecordByName('inventory_control', item.productName);
+      if (!inventoryItem) {
+        return res.status(400).json({ message: `Producto "${item.productName}" no encontrado.` });
+      }
+      if (inventoryItem.data.quantity < item.quantity) {
+        return res.status(400).json({ message: `Stock insuficiente para "${item.productName}".` });
+      }
+    }
+
+    // 2. Crear el registro de la venta principal
+    const saleRecord = createModuleRecord(module, saleData);
+
+    // 3. Actualizar stock y registrar items de venta
+    for (const item of products) {
+      const inventoryItem = getModuleRecordByName('inventory_control', item.productName);
+      const newStock = inventoryItem.data.quantity - item.quantity;
+      updateModuleRecord(inventoryItem.id, { ...inventoryItem.data, quantity: newStock });
+
+      db.prepare(
+        'INSERT INTO sales_items (sale_id, product_name, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)'
+      ).run(saleRecord.id, item.productName, item.quantity, item.unitPrice, item.quantity * item.unitPrice);
+    }
+    persistDatabase();
+
+    return res.status(201).json(saleRecord);
+  }
+
+  const record = createModuleRecord(module, data);
   return res.status(201).json(record);
+});
+
+app.post('/api/inventory/restock', (req, res) => {
+  const { productName, quantity } = req.body;
+
+  if (!productName || !quantity) {
+    return res.status(400).json({ message: 'Debes especificar el producto y la cantidad a reabastecer.' });
+  }
+
+  const inventoryItem = getModuleRecordByName('inventory_control', productName);
+
+  if (!inventoryItem) {
+    return res.status(404).json({ message: `Producto "${productName}" no encontrado en el inventario.` });
+  }
+
+  const currentStock = Number(inventoryItem.data.quantity || 0);
+  const restockQuantity = Number(quantity);
+  const newStock = currentStock + restockQuantity;
+
+  updateModuleRecord(inventoryItem.id, { ...inventoryItem.data, quantity: newStock });
+
+  // Guardar en el historial de reabastecimiento
+  createModuleRecord('restock_history', {
+    product_name: productName,
+    quantity_added: restockQuantity,
+    notes: `Reabastecimiento manual. Stock anterior: ${currentStock}, stock nuevo: ${newStock}.`
+  });
+
+  return res.json({ message: 'Reabastecimiento exitoso.', newStock });
 });
 
 app.put('/api/modules/:module/records/:id', (req, res) => {
