@@ -1,0 +1,30 @@
+{
+  "build": {
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev",
+    "devPath": "../dist",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "Prototipo Innovacion",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "windows": [
+      {
+        "title": "Inventario local de suministros",
+        "width": 1280,
+        "height": 840,
+        "resizable": true
+      }
+    ]
+    ,
+    "bundle": {
+      "identifier": "com.prototipoinnovacion.app",
+      "resources": [
+        "../../Backend",
+        "bundled/node"
+      ]
+    }
+  }
+}

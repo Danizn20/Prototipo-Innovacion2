@@ -1,3 +1,4 @@
 @echo off
 cd %~dp0
-start "" "%~dp0prototipo_innovacion.exe"
+powershell -Command "Start-Process 'prototipo_innovacion.exe' -WindowStyle Hidden"
+exit
