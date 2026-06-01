@@ -2022,7 +2022,7 @@ function AppShell() {
                 Producto
                 <select
                   value={restockForm.productName}
-                  onChange={(e) => setRestockForm(current => ({ ...current, productName: e.target.value }))
+                  onChange={(e) => setRestockForm(current => ({ ...current, productName: e.target.value }))}
                 >
                   <option value="">Selecciona un producto</option>
                   {inventoryRows.map(row => (
@@ -2036,7 +2036,8 @@ function AppShell() {
                   type="number"
                   min="1"
                   value={restockForm.quantity}
-                  onChange={(e) => setRestockForm(current => ({ ...current, quantity: e.target.value }))}
+                  onChange={(e) => setRestockForm(current => ({ ...current, quantity: e.target.value }))
+                  }
                   placeholder="Ej: 50"
                 />
               </label>

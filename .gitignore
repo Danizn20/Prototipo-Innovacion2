@@ -9,3 +9,15 @@ Backend/data/*.db-wal
 Front end/dist/
 Front end/node_modules/
 Front end/src-tauri/target/
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+
+# Base de datos principal
+app.db
+
+# Binarios de la aplicación
+PrototipoPortable/
+Inventario Innovacion*.msi

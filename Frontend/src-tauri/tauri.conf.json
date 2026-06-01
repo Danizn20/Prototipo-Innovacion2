@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Inventario Innovacion",
   "version": "0.3.0",
-  "identifier": "com.prototipoinnovacion.app",
+  "identifier": "com.prototipoinnovacion.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -33,8 +33,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "externalBin": [
+      "../../Backend/node"
+    ],
     "resources": [
-      "../../Backend"
+      "../Backend"
     ]
   }
 }
