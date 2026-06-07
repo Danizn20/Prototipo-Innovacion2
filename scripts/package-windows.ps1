@@ -89,8 +89,13 @@ Write-Ok "Starting Tauri build (this may take some time)"
 npx tauri build
 if ($LASTEXITCODE -ne 0) { Write-Err "Tauri build failed"; Pop-Location; exit 1 }
 
-Write-Ok "Tauri build complete. Installers in src-tauri/target/release/bundle"
+Write-Ok "Tauri build complete. Moving installers to Instaladores folder..."
+if (-not (Test-Path "$repoRoot\Instaladores")) {
+  New-Item -ItemType Directory -Force -Path "$repoRoot\Instaladores" | Out-Null
+}
+Copy-Item -Path "src-tauri\target\release\bundle\msi\*.msi" -Destination "$repoRoot\Instaladores" -Force -ErrorAction SilentlyContinue
+Copy-Item -Path "src-tauri\target\release\bundle\nsis\*-setup.exe" -Destination "$repoRoot\Instaladores" -Force -ErrorAction SilentlyContinue
 Pop-Location
 
-Write-Ok "Packaging complete. The generated installer/binary will include the bundled Node and Backend resources as configured." 
+Write-Ok "Packaging complete. Installers are available in the 'Instaladores' directory in the project root." 
 Pop-Location
