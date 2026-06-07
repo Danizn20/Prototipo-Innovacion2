@@ -21,16 +21,15 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 Push-Location $repoRoot
 
-if (-not (Test-Path "Front end/src-tauri")) {
-  Write-Err "This script must be run from the repository root (where 'Front end' exists)."; exit 1
+if (-not (Test-Path "Frontend/src-tauri")) {
+  Write-Err "This script must be run from the repository root (where 'Frontend' exists)."; exit 1
 }
 
-# Prepare bundled node path
-$bundleNodeDir = Join-Path "Front end" "src-tauri\bundled\node"
-if (Test-Path $bundleNodeDir) {
-  Remove-Item $bundleNodeDir -Recurse -Force
+# Prepare sidecar node path
+$binDir = Join-Path "Frontend" "src-tauri\bin"
+if (-not (Test-Path $binDir)) {
+  New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 }
-New-Item -ItemType Directory -Force -Path $bundleNodeDir | Out-Null
 
 $zipName = "node-v$NodeVersion-win-$Arch.zip"
 $url = "https://nodejs.org/dist/v$NodeVersion/$zipName"
@@ -43,19 +42,22 @@ try {
   Write-Err "Failed to download Node runtime. Check network or version. $_"; exit 1
 }
 
-Write-Ok "Extracting Node runtime to $bundleNodeDir"
+Write-Ok "Extracting Node runtime..."
+$tmpExtracted = Join-Path $env:TEMP "node-extracted-$(Get-Random)"
+if (Test-Path $tmpExtracted) { Remove-Item $tmpExtracted -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $tmpExtracted | Out-Null
+
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::ExtractToDirectory($tmpZip, $bundleNodeDir)
+[System.IO.Compression.ZipFile]::ExtractToDirectory($tmpZip, $tmpExtracted)
 
-# The zip contains a top-level folder like node-v20.8.1-win-x64
-$extracted = Get-ChildItem -Directory $bundleNodeDir | Select-Object -First 1
-if ($null -eq $extracted) { Write-Err "Extraction failed."; exit 1 }
+$extractedNode = Get-ChildItem -Path $tmpExtracted -Filter "node.exe" -Recurse | Select-Object -First 1
+if ($null -eq $extractedNode) { Write-Err "node.exe not found in downloaded zip."; exit 1 }
 
-# Move contents up one level
-Get-ChildItem $extracted.FullName -Force | ForEach-Object { Move-Item $_.FullName $bundleNodeDir -Force }
-Remove-Item $extracted.FullName -Recurse -Force
+$targetNodePath = Join-Path $binDir "node-x86_64-pc-windows-msvc.exe"
+Copy-Item $extractedNode.FullName -Destination $targetNodePath -Force
+Remove-Item $tmpExtracted -Recurse -Force
 
-Write-Ok "Node runtime prepared in $bundleNodeDir"
+Write-Ok "Node runtime prepared as sidecar at $targetNodePath"
 
 # Install backend production dependencies
 Push-Location "Backend"
@@ -65,7 +67,7 @@ npm ci --production
 Pop-Location
 
 # Build frontend
-Push-Location "Front end"
+Push-Location "Frontend"
 Write-Ok "Preparing frontend build"
 if (-not (Test-Path "node_modules/.bin/vite.cmd")) {
   Write-Ok "Frontend dependencies missing; installing them now"
@@ -77,17 +79,17 @@ npm run build
 Pop-Location
 
 # Build Tauri app
-Push-Location "Front end/src-tauri"
-if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-  Write-Err "Rust toolchain (cargo) not found. Install Rust to proceed with building the Tauri binary.";
+Push-Location "Frontend"
+if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+  Write-Err "npm not found. Install Node to proceed with building the Tauri binary.";
   Pop-Location; exit 1
 }
 
 Write-Ok "Starting Tauri build (this may take some time)"
-cargo build --release
+npx tauri build
 if ($LASTEXITCODE -ne 0) { Write-Err "Tauri build failed"; Pop-Location; exit 1 }
 
-Write-Ok "Tauri build complete. Binary in target/release"
+Write-Ok "Tauri build complete. Installers in src-tauri/target/release/bundle"
 Pop-Location
 
 Write-Ok "Packaging complete. The generated installer/binary will include the bundled Node and Backend resources as configured." 

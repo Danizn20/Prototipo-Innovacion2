@@ -1,38 +1,26 @@
-use tauri::api::process::{Command, CommandEvent};
+use tauri_plugin_shell::ShellExt;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
-    .setup(|app| {
-      let handle = app.handle();
-      tauri::async_runtime::spawn(async move {
-        let (mut rx, _child) = Command::new_sidecar("node")
-          .expect("failed to create `node` sidecar command")
-          .spawn()
-          .expect("Failed to spawn sidecar");
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            let app_handle = app.handle().clone();
 
-        while let Some(event) = rx.recv().await {
-          match event {
-            CommandEvent::Stdout(line) => {
-              log::info!("[BACKEND] {}", line);
-            }
-            CommandEvent::Stderr(line) => {
-              log::error!("[BACKEND] {}", line);
-            }
-            _ => {}
-          }
-        }
-      });
+            tauri::async_runtime::spawn(async move {
+                let resource_dir = app_handle.path().resource_dir()
+                    .expect("Failed to get resource dir");
+                let script_path = resource_dir.join("Backend").join("start-packaged.js");
 
-      if cfg!(debug_assertions) {
-        handle.plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
-      }
-      Ok(())
-    })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+                let (_rx, _child) = app_handle.shell().sidecar("node")
+                    .expect("Failed to setup node sidecar")
+                    .args([script_path.to_string_lossy().into_owned()])
+                    .spawn()
+                    .expect("Failed to spawn backend process");
+            });
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

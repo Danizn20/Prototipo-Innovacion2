@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function getDefaultPersistDir() {
   if (process.platform === 'win32') {
@@ -27,6 +30,7 @@ async function ensurePersistDb() {
 
   // possible bundled locations to copy initial DB from
   const candidates = [
+    path.join(__dirname, 'data', 'app.db'),
     path.join(process.cwd(), 'Backend', 'data', 'app.db'),
     path.join(process.cwd(), 'data', 'app.db'),
     path.join(path.dirname(process.execPath), 'data', 'app.db'),
@@ -57,7 +61,7 @@ async function main() {
 
   // spawn the server
   const node = process.execPath || 'node';
-  const serverPath = path.join(process.cwd(), 'Backend', 'src', 'server.js');
+  const serverPath = path.join(__dirname, 'src', 'server.js');
 
   const child = spawn(node, [serverPath], {
     stdio: 'inherit',

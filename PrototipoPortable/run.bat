@@ -1,4 +1,4 @@
 @echo off
 cd %~dp0
-powershell -Command "Start-Process 'prototipo_innovacion.exe' -WindowStyle Hidden"
+powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File "start.ps1"
 exit

@@ -1,22 +1,20 @@
-import initSqlJs from 'sql.js';
+import initSqlJs from 'sql.js/dist/sql-asm.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createRequire } from 'node:module';
+import process from 'node:process';
 
-// Support configurable persistent data directory (useful when packaged)
-// If PROTOTIPO_DATA_DIR is set (absolute path), use it. Otherwise fall back to repo Backend/data.
+// Usamos process.cwd() para que los datos se guarden junto al ejecutable final
 const configuredDataDir = process.env.PROTOTIPO_DATA_DIR && String(process.env.PROTOTIPO_DATA_DIR).trim().length > 0
   ? path.resolve(String(process.env.PROTOTIPO_DATA_DIR))
-  : path.resolve('Backend', 'data');
+  : path.join(process.cwd(), 'data');
 
 const configuredUploadsDir = process.env.PROTOTIPO_UPLOADS_DIR && String(process.env.PROTOTIPO_UPLOADS_DIR).trim().length > 0
   ? path.resolve(String(process.env.PROTOTIPO_UPLOADS_DIR))
-  : path.resolve('Backend', 'uploads');
+  : path.join(process.cwd(), 'uploads');
 
 const dataDir = configuredDataDir;
 const uploadsDir = configuredUploadsDir;
 const dbPath = path.join(dataDir, 'app.db');
-const require = createRequire(import.meta.url);
 
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -26,9 +24,8 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-const SQL = await initSqlJs({
-  locateFile: (file) => require.resolve(`sql.js/dist/${file}`)
-});
+// initSqlJs es lo suficientemente inteligente en Node para no necesitar el require
+const SQL = await initSqlJs();
 
 export const db = fs.existsSync(dbPath)
   ? new SQL.Database(fs.readFileSync(dbPath))
@@ -187,7 +184,13 @@ export function listModuleRecords(moduleName) {
   if (moduleName === 'sales') {
     return records.map(record => {
       const items = allRows('SELECT * FROM sales_items WHERE sale_id = ?', [record.id]);
-      return { ...record, items };
+      const mappedProducts = items.map(i => ({
+        productName: i.product_name,
+        quantity: i.quantity,
+        unitPrice: i.unit_price,
+        totalPrice: i.total_price
+      }));
+      return { ...record, data: { ...record.data, products: mappedProducts } };
     });
   }
 
@@ -201,7 +204,13 @@ export function getModuleRecord(id) {
   const record = parseData(row);
   if (record.module === 'sales') {
     const items = allRows('SELECT * FROM sales_items WHERE sale_id = ?', [id]);
-    return { ...record, items };
+    const mappedProducts = items.map(i => ({
+      productName: i.product_name,
+      quantity: i.quantity,
+      unitPrice: i.unit_price,
+      totalPrice: i.total_price
+    }));
+    return { ...record, data: { ...record.data, products: mappedProducts } };
   }
 
   return record;
@@ -209,8 +218,8 @@ export function getModuleRecord(id) {
 
 export function getModuleRecordByName(moduleName, name) {
     const row = oneRow(
-        "SELECT * FROM module_records WHERE module = ? AND json_extract(data_json, '$.product') = ?",
-        [moduleName, name]
+        "SELECT * FROM module_records WHERE module = ? AND (json_extract(data_json, '$.product') = ? OR json_extract(data_json, '$.name') = ?)",
+        [moduleName, name, name]
     );
     return row ? parseData(row) : null;
 }
@@ -238,7 +247,8 @@ export function updateModuleRecord(id, data) {
     SET data_json = ?, updated_at = datetime('now')
     WHERE id = ?
   `);
-record = getModuleRecord(id);
+
+  const record = getModuleRecord(id); // <--- AÑADE EL 'const' AQUÍ
   if (!record) return;
 
   if (record.module === 'sales') {
@@ -247,7 +257,7 @@ record = getModuleRecord(id);
     statement.free();
   }
 
-  const 
+
   statement.run([JSON.stringify(data), id]);
   statement.free();
   persistDatabase();

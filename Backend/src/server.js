@@ -2,6 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import multer from 'multer';
 import XLSX from 'xlsx';
 import {
@@ -17,12 +18,15 @@ import {
   getUploadsDir,
   listDocuments,
   listModuleRecords,
-  updateModuleRecord
+  updateModuleRecord,
+  db,                // <-- ¡Agrega esto!
+  persistDatabase    // <-- ¡Agrega esto!
 } from './db.js';
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
 const uploadsDir = getUploadsDir();
+
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
@@ -138,12 +142,15 @@ app.post('/api/modules/:module/records', (req, res) => {
     // 3. Actualizar stock y registrar items de venta
     for (const item of products) {
       const inventoryItem = getModuleRecordByName('inventory_control', item.productName);
-      const newStock = inventoryItem.data.quantity - item.quantity;
-      updateModuleRecord(inventoryItem.id, { ...inventoryItem.data, quantity: newStock });
+      const currentStock = Number(inventoryItem.data.quantity ?? inventoryItem.data.stock ?? 0);
+      const newStock = currentStock - item.quantity;
+      updateModuleRecord(inventoryItem.id, { ...inventoryItem.data, quantity: newStock, stock: newStock });
 
-      db.prepare(
+      const stmt = db.prepare(
         'INSERT INTO sales_items (sale_id, product_name, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)'
-      ).run(saleRecord.id, item.productName, item.quantity, item.unitPrice, item.quantity * item.unitPrice);
+      );
+      stmt.run([saleRecord.id, item.productName, item.quantity, item.unitPrice, item.quantity * item.unitPrice]);
+      stmt.free();
     }
     persistDatabase();
 
@@ -167,11 +174,11 @@ app.post('/api/inventory/restock', (req, res) => {
     return res.status(404).json({ message: `Producto "${productName}" no encontrado en el inventario.` });
   }
 
-  const currentStock = Number(inventoryItem.data.quantity || 0);
+  const currentStock = Number(inventoryItem.data.quantity ?? inventoryItem.data.stock ?? 0);
   const restockQuantity = Number(quantity);
   const newStock = currentStock + restockQuantity;
 
-  updateModuleRecord(inventoryItem.id, { ...inventoryItem.data, quantity: newStock });
+  updateModuleRecord(inventoryItem.id, { ...inventoryItem.data, quantity: newStock, stock: newStock });
 
   // Guardar en el historial de reabastecimiento
   createModuleRecord('restock_history', {
@@ -205,6 +212,14 @@ app.delete('/api/modules/:module/records/:id', (req, res) => {
   return res.status(204).send();
 });
 
+app.delete('/api/modules/:module/records', (req, res) => {
+  const records = listModuleRecords(req.params.module);
+  for (const record of records) {
+    deleteModuleRecord(record.id);
+  }
+  return res.status(204).send();
+});
+
 app.get('/api/modules/:module/export', (req, res) => {
   const records = listModuleRecords(req.params.module);
   const workbook = req.params.module === 'inventory_control'
@@ -217,9 +232,47 @@ app.get('/api/modules/:module/export', (req, res) => {
     })();
   const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename=${req.params.module}.xlsx`);
-  return res.send(buffer);
+  try {
+    const exportDir = path.join(os.homedir(), 'Documents', 'Exportaciones_Prototipo', 'Excel');
+    if (!fs.existsSync(exportDir)) {
+      fs.mkdirSync(exportDir, { recursive: true });
+    }
+    const d = new Date();
+    const formattedDate = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth()+1).padStart(2, '0')}-${d.getFullYear()}-${String(d.getHours()).padStart(2, '0')}-${String(d.getMinutes()).padStart(2, '0')}hrs`;
+    const moduleNameStr = req.params.module.charAt(0).toUpperCase() + req.params.module.slice(1);
+    const filename = `${moduleNameStr}-${formattedDate}.xlsx`;
+    const filePath = path.join(exportDir, filename);
+    fs.writeFileSync(filePath, buffer);
+    return res.json({ message: `Exportación guardada en: ${filePath}` });
+  } catch (err) {
+    console.error("Error saving excel locally:", err);
+    // Fallback if permission issues
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=${req.params.module}.xlsx`);
+    return res.send(buffer);
+  }
+});
+
+app.post('/api/export/save-local', memoryUpload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'Debes enviar un archivo' });
+  }
+  const type = req.body.type || 'PDF';
+  try {
+    const exportDir = path.join(os.homedir(), 'Documents', 'Exportaciones_Prototipo', type);
+    if (!fs.existsSync(exportDir)) {
+      fs.mkdirSync(exportDir, { recursive: true });
+    }
+    const d = new Date();
+    const formattedDate = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth()+1).padStart(2, '0')}-${d.getFullYear()}-${String(d.getHours()).padStart(2, '0')}-${String(d.getMinutes()).padStart(2, '0')}hrs`;
+    const filename = req.file.originalname || `Exportacion-${formattedDate}`;
+    const filePath = path.join(exportDir, filename);
+    fs.writeFileSync(filePath, req.file.buffer);
+    return res.json({ message: `Exportación guardada en: ${filePath}` });
+  } catch (err) {
+    console.error("Error saving file locally:", err);
+    return res.status(500).json({ message: 'Error al guardar archivo en Documentos.' });
+  }
 });
 
 app.post('/api/modules/:module/import', memoryUpload.single('file'), (req, res) => {
@@ -296,6 +349,6 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ message: 'Error interno del servidor' });
 });
 
-app.listen(port, () => {
-  console.log(`Backend local de inventario escuchando en http://localhost:${port}`);
+app.listen(port, '127.0.0.1', () => {
+  console.log(`Backend escuchando en http://127.0.0.1:${port}`);
 });

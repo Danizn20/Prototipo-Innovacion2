@@ -20,90 +20,32 @@ export const MODULES = {
     key: 'products',
     label: 'Productos',
     title: 'Productos',
-    subtitle: 'Control de existencias, costos y precios de venta.',
+    subtitle: 'Módulo de productos unificado con información de proveedores y mercado.',
     actionLabel: 'Guardar producto',
     listLabel: 'Productos registrados',
     displayLabel: (record) => `${record.name || 'Producto'} · ${record.category || 'Sin categoria'}`,
     fields: [
-      { name: 'name', label: 'Nombre del producto', type: 'text', placeholder: 'Arroz bolsa 5kg', required: true },
-      { name: 'sku', label: 'Codigo / SKU', type: 'text', placeholder: 'ALI-001' },
+      { name: 'name', label: 'Productos', type: 'text', placeholder: 'Arroz bolsa 5kg', required: true },
+      { name: 'supplier', label: 'Proveedores', type: 'text', placeholder: 'Distribuidora Central' },
+      { name: 'marketValue', label: 'Valores de Mercado', type: 'number', step: '1', min: 0 },
+      { name: 'sku', label: 'Codigo Producto', type: 'text', placeholder: 'ALI-001' },
+      { name: 'stock', label: 'Cantidad disponible', type: 'number', min: 0 },
       { name: 'category', label: 'Categoria', type: 'text', placeholder: 'Alimentos' },
-      { name: 'stock', label: 'Stock actual', type: 'number', min: 0 },
-      { name: 'unit', label: 'Unidad', type: 'select', options: ['unidades', 'cajas', 'paquetes', 'bolsas', 'botellas', 'kg', 'litros'] },
-      { name: 'cost', label: 'Costo', type: 'number', step: '0.01', min: 0 },
-      { name: 'salePrice', label: 'Precio de venta', type: 'number', step: '0.01', min: 0 },
-      { name: 'minStock', label: 'Stock minimo', type: 'number', min: 0 },
       { name: 'status', label: 'Estado', type: 'select', options: ['Activo', 'Bajo stock', 'Descontinuado'] },
-      { name: 'notes', label: 'Observaciones', type: 'textarea', rows: 4, placeholder: 'Rotacion, ubicacion, alertas...' }
+      { name: 'cost', label: 'Costo (Calculado)', type: 'number', step: '1', min: 0 },
+      { name: 'salePrice', label: 'Precio de venta (Calculado)', type: 'number', step: '1', min: 0 },
+      { name: 'notes', label: 'Observaciones', type: 'textarea', rows: 4, placeholder: 'Rotacion, alertas...' }
     ],
     defaultValues: {
       name: '',
+      supplier: '',
+      marketValue: 0,
       sku: '',
-      category: '',
       stock: 0,
-      unit: 'unidades',
-      cost: 0,
-      salePrice: 0,
-      minStock: 0,
-      status: 'Activo',
-      notes: ''
-    }
-  },
-  suppliers: {
-    key: 'suppliers',
-    label: 'Proveedores',
-    title: 'Proveedores',
-    subtitle: 'Gestion de contactos, tiempos de entrega y calificaciones.',
-    actionLabel: 'Guardar proveedor',
-    listLabel: 'Proveedores registrados',
-    displayLabel: (record) => `${record.name || 'Proveedor'} · ${record.category || 'General'}`,
-    fields: [
-      { name: 'name', label: 'Nombre del proveedor', type: 'text', placeholder: 'Distribuidora Central', required: true },
-      { name: 'contact', label: 'Contacto', type: 'text', placeholder: 'Maria Perez' },
-      { name: 'phone', label: 'Telefono', type: 'text', placeholder: '0999999999' },
-      { name: 'email', label: 'Correo', type: 'email', placeholder: 'ventas@proveedor.local' },
-      { name: 'category', label: 'Categoria', type: 'text', placeholder: 'Alimentos' },
-      { name: 'leadTime', label: 'Tiempo de entrega', type: 'text', placeholder: '48h' },
-      { name: 'rating', label: 'Calificacion', type: 'select', options: ['A', 'B', 'C'] },
-      { name: 'status', label: 'Estado', type: 'select', options: ['Activo', 'Pendiente', 'Suspendido'] },
-      { name: 'notes', label: 'Observaciones', type: 'textarea', rows: 4, placeholder: 'Condiciones, descuentos, acuerdos...' }
-    ],
-    defaultValues: {
-      name: '',
-      contact: '',
-      phone: '',
-      email: '',
       category: '',
-      leadTime: '',
-      rating: 'A',
       status: 'Activo',
-      notes: ''
-    }
-  },
-  product_values: {
-    key: 'product_values',
-    label: 'Valores de Productos',
-    title: 'Valores de productos',
-    subtitle: 'Costo, precio, margen y ajustes de valor por producto.',
-    actionLabel: 'Guardar valor',
-    listLabel: 'Valores registrados',
-    displayLabel: (record) => `${record.product || 'Producto'} · margen ${record.margin ?? 0}%`,
-    fields: [
-      { name: 'product', label: 'Producto', type: 'text', placeholder: 'Arroz bolsa 5kg', required: true },
-      { name: 'cost', label: 'Costo', type: 'number', step: '0.01', min: 0 },
-      { name: 'salePrice', label: 'Precio de venta', type: 'number', step: '0.01', min: 0 },
-      { name: 'discount', label: 'Descuento', type: 'number', step: '0.01', min: 0 },
-      { name: 'margin', label: 'Margen (%)', type: 'number', step: '0.01', min: 0 },
-      { name: 'updatedOn', label: 'Fecha de actualizacion', type: 'date' },
-      { name: 'notes', label: 'Observaciones', type: 'textarea', rows: 4, placeholder: 'Promocion, ajuste, temporada...' }
-    ],
-    defaultValues: {
-      product: '',
       cost: 0,
       salePrice: 0,
-      discount: 0,
-      margin: 0,
-      updatedOn: '',
       notes: ''
     }
   },
@@ -202,13 +144,10 @@ export const MODULE_LABELS = {
   home: 'Inicio',
   dashboard: 'Dashboard',
   products: 'Productos',
-  suppliers: 'Proveedores',
-  product_values: 'Valores de Productos',
   inventory_control: 'Inventario',
   sales: 'Ventas',
   reports: 'Reportes',
-  documents: 'Documentos'
-  ,
+  documents: 'Documentos',
   settings: 'Configuraciones'
 };
 
@@ -216,8 +155,6 @@ export const MODULE_ORDER = [
   'home',
   'dashboard',
   'products',
-  'suppliers',
-  'product_values',
   'inventory_control',
   'sales',
   'documents',
@@ -235,8 +172,6 @@ export function getDefaultForm(moduleKey) {
 export function getInitialForms() {
   return {
     products: getDefaultForm('products'),
-    suppliers: getDefaultForm('suppliers'),
-    product_values: getDefaultForm('product_values'),
     inventory_control: getDefaultForm('inventory_control'),
     sales: getDefaultForm('sales'),
     reports: getDefaultForm('reports')

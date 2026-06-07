@@ -1,13 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Playwrite+GB+S:wght@100..400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
   color-scheme: dark;
-  font-family: 'Playwrite GB S', 'Segoe UI Variable Text', 'Trebuchet MS', 'Segoe UI', sans-serif;
+  font-family: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(255, 182, 77, 0.18), transparent 28%),
-    radial-gradient(circle at top right, rgba(82, 168, 255, 0.18), transparent 28%),
-    linear-gradient(180deg, #08111f 0%, #111826 100%);
-  color: #eef3ff;
+    radial-gradient(circle at top left, rgba(217, 122, 34, 0.15), transparent 35%),
+    linear-gradient(180deg, #1c1a17 0%, #151311 100%);
+  color: #f2e9e1;
 }
 
 * {
@@ -43,8 +42,8 @@ button {
 
 .auth-card,
 .card {
-  background: rgba(13, 21, 39, 0.82);
-  border: 1px solid rgba(154, 174, 221, 0.18);
+  background: rgba(26, 22, 19, 0.82);
+  border: 1px solid rgba(217, 122, 34, 0.3);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(14px);
 }
@@ -52,12 +51,20 @@ button {
 .auth-card {
   width: min(520px, 100%);
   border-radius: 28px;
-  padding: 28px;
+  padding: 32px 28px;
+  text-align: center;
+}
+
+.auth-card h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.2;
 }
 
 .auth-form {
   display: grid;
   gap: 16px;
+  margin-top: 16px;
 }
 
 .app-shell {
@@ -76,8 +83,8 @@ button {
   gap: 20px;
   padding: 20px;
   border-radius: 28px;
-  background: rgba(7, 12, 20, 0.9);
-  border: 1px solid rgba(154, 174, 221, 0.14);
+  background: rgba(26, 22, 19, 0.9);
+  border: 1px solid rgba(217, 122, 34, 0.2);
   height: calc(100vh - 40px);
 }
 
@@ -87,7 +94,7 @@ button {
   padding: 14px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(159, 180, 226, 0.12);
+  border: 1px solid rgba(217, 122, 34, 0.15);
 }
 
 .sidebar-panel-title {
@@ -160,8 +167,10 @@ button {
 }
 
 .nav-item.active {
-  background: linear-gradient(135deg, rgba(255, 182, 77, 0.25), rgba(82, 168, 255, 0.25));
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, rgba(255, 149, 0, 0.2), rgba(217, 122, 34, 0.05));
+  border: 1px solid rgba(255, 149, 0, 0.6);
+  box-shadow: 0 0 15px rgba(255, 149, 0, 0.2);
+  color: #ffb84d;
 }
 
 .main-panel {
@@ -210,11 +219,10 @@ button {
   border-radius: 24px;
 }
 
-.hero-panel.wide h1,
-.auth-card h1 {
+.hero-panel.wide h1 {
   margin: 0;
   font-size: clamp(2rem, 4vw, 4rem);
-  line-height: 0.95;
+  line-height: 1.1;
 }
 
 .eyebrow {
@@ -322,7 +330,7 @@ button {
 .dashboard-illustration-wrap {
   border-radius: 20px;
   overflow: hidden;
-  border: 1px solid rgba(159, 180, 226, 0.12);
+  border: 1px solid rgba(217, 122, 34, 0.15);
 }
 
 .stats-grid.compact {
@@ -338,7 +346,7 @@ button {
 .stat-card {
   padding: 20px;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(154, 174, 221, 0.12);
+  border: 1px solid rgba(217, 122, 34, 0.15);
 }
 
 .stat-card span {
@@ -583,7 +591,7 @@ button {
 }
 
 .pie-center-value {
-  fill: #f4f7ff;
+  color: #f4f7ff;
   font-size: 1.15rem;
   font-weight: 700;
 }
@@ -674,15 +682,29 @@ select:focus {
 }
 
 .primary {
-  background: linear-gradient(135deg, #ffb64d, #4ea7ff);
+  background: linear-gradient(135deg, #ff9500, #d97a22);
   color: white;
+  box-shadow: 0 4px 14px rgba(217, 122, 34, 0.35);
+}
+
+.primary:hover {
+  background: linear-gradient(135deg, #ffa62b, #e68525);
+  box-shadow: 0 6px 20px rgba(217, 122, 34, 0.5);
 }
 
 .secondary,
 .logout-button,
 .file-button {
-  background: rgba(255, 255, 255, 0.06);
-  color: #eff4ff;
+  background: transparent;
+  border: 1px solid rgba(255, 149, 0, 0.3);
+  color: #ffb84d;
+}
+
+.secondary:hover,
+.logout-button:hover,
+.file-button:hover {
+  background: rgba(255, 149, 0, 0.1);
+  border: 1px solid rgba(255, 149, 0, 0.5);
 }
 
 .text-button {
@@ -1255,3 +1277,125 @@ select:focus {
 
 
 
+.bar-item:hover .hover-show { opacity: 1 !important; }
+
+.home-dynamic-stats { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+.home-stat-box { display: flex; align-items: center; gap: 16px; background: rgba(255, 255, 255, 0.04); padding: 16px; border-radius: 20px; border: 1px solid rgba(159, 180, 226, 0.12); }
+.theme-light .home-stat-box { background: #ffffff; border: 1px solid #9ca3af; }
+.stat-icon { font-size: 24px; }
+.stat-label { font-size: 13px; color: #b8c4df; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
+.theme-light .stat-label { color: #4b5563 !important; }
+.stat-value { font-size: 18px; font-weight: 600; color: #f4f7ff; margin: 4px 0 0; }
+.theme-light .stat-value { color: #000000 !important; }
+
+.theme-light input, .theme-light textarea, .theme-light select { color: #000000 !important; border: 1px solid #9ca3af !important; }
+
+.theme-light .inventory-table td,
+.theme-light .inventory-table th,
+.theme-light .stat-card strong,
+.theme-light .record-grid dd,
+.theme-light .pie-center-value,
+.theme-light .alert-card strong,
+.theme-light .alert-card span,
+.theme-light .alert-card p,
+.theme-light .card-title,
+.theme-light .card-subtitle,
+.theme-light .module-plain-description {
+  color: #000000 !important;
+}
+/* Restored Light Theme Overrides */
+.theme-light {
+  color-scheme: light;
+  background: #f1ead7;
+  color: #1f2937;
+}
+
+.theme-light .card,
+.theme-light .auth-card,
+.theme-light .sidebar,
+.theme-light .hero-panel,
+.theme-light .stat-card,
+.theme-light .record-card,
+.theme-light .quick-link,
+.theme-light .document-card {
+  background: #ffffff;
+  border: 1px solid rgba(255, 149, 0, 0.35);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.05);
+  color: #1f2937;
+}
+
+.theme-light .sidebar {
+  background: #ffffff;
+}
+
+.theme-light .nav-item { background: transparent; color: #1f2937; }
+.theme-light .nav-item.active { background: #fef3c7; border: 1px solid #f59e0b; color: #b45309; box-shadow: 0 0 15px rgba(245, 158, 11, 0.1); }
+
+.theme-light .card-title, .theme-light .card-subtitle, .theme-light .module-plain-description { color: #1f2937 !important; }
+.theme-light .lead, .theme-light .muted, .theme-light .record-topline p, .theme-light .notes { color: #4b5563 !important; }
+
+.theme-light .primary { background: linear-gradient(135deg, #f59e0b, #ea580c) !important; color: #ffffff !important; font-weight: 700; border: none; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35) !important; }
+.theme-light .secondary, .theme-light .logout-button, .theme-light .file-button { background: rgba(245, 158, 11, 0.1) !important; color: #b45309 !important; border: 1px solid rgba(245, 158, 11, 0.4) !important; }
+
+.theme-light .chart-card { background: #ffffff; border: 1px solid rgba(255,149,0,0.15); }
+.theme-light .chart-tooltip { background: rgba(255,255,255,0.98); color: #1f2937; border: 1px solid rgba(255,149,0,0.15); }
+
+.theme-light .badge.accent { background: #fef3c7; color: #b45309; border: 1px solid rgba(245,158,11,0.3); }
+
+/* Table rows styling */
+.theme-light .inventory-table tr:nth-child(even) { background: #fdf6e3; }
+.theme-light .inventory-table tr:nth-child(odd) { background: #ffffff; }
+.theme-light .inventory-table th { background: #ffffff; border-bottom: 2px solid #f59e0b; color: #1f2937; }
+.theme-light .sales-subpanel { background: rgba(0, 0, 0, 0.02); }
+.theme-light .sales-cart-item { background: #ffffff; border: 1px solid rgba(0,0,0,0.05); }
+
+/* Make chart header labels and Export button clearly visible */
+.theme-light .chart-title-row span { color: #012233 !important; }
+.theme-light .chart-title-row strong { color: #012233 !important; }
+.theme-light .chart-card .card-header { background: transparent; }
+.theme-light .chart-card .card-header .chart-filters { gap: 8px; }
+.theme-light .export-btn {
+  background: #ffffff !important;
+  color: #042331 !important;
+  border: 1px solid rgba(4,66,90,0.08) !important;
+  padding: 8px 12px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(2,6,23,0.06) !important;
+}
+
+/* Ensure context info above chart is visible */
+.theme-light .chart-active-context { color: #022634 !important; }
+
+/* Stronger chart colors for readability in light mode */
+.theme-light .line-chart polyline {
+  stroke: #1e40af !important;
+}
+.theme-light .line-chart circle {
+  fill: #1e40af !important;
+}
+.theme-light .line-chart .line-point-glow {
+  fill: rgba(30,64,175,0.18) !important;
+}
+
+.theme-light .bar-fill {
+  box-shadow: 0 8px 24px rgba(3, 7, 18, 0.06);
+  border: 1px solid rgba(16,24,32,0.04);
+}
+.theme-light .bar-fill::after {
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.02));
+}
+
+.theme-light .pie-legend-item strong { color: #071226; }
+.theme-light .primary { box-shadow: 0 6px 18px rgba(78,167,255,0.08); }
+
+/* Extra Login & Input Overrides for Dark Theme (Warm) */
+input:focus, textarea:focus, select:focus {
+  border-color: rgba(255, 149, 0, 0.6) !important;
+  box-shadow: 0 0 0 3px rgba(255, 149, 0, 0.15) !important;
+  outline: none;
+}
+.auth-form input {
+  background: rgba(0,0,0,0.2) !important;
+  border: 1px solid rgba(255, 149, 0, 0.3) !important;
+  color: #fff !important;
+}

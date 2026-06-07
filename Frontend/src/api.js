@@ -1,8 +1,15 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : 'http://localhost:3001');
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001'; 
 
 function resolveApiUrl(path) {
-  return API_BASE_URL ? new URL(path, API_BASE_URL).toString() : path;
+  // Si la ruta ya trae el http completo, no la tocamos
+  if (path.startsWith('http')) return path;
+  
+  // Limpiamos los slashes para que no quede como /api//dashboard
+  const safePath = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE_URL}${safePath}`;
 }
+
+// ... deja el resto de tus exportaciones (apiJson, downloadFile, etc) igual ...
 
 export async function apiJson(path, options = {}) {
   const response = await fetch(resolveApiUrl(path), {

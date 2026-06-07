@@ -24,6 +24,9 @@
     }
   },
   "bundle": {
+    "resources": {
+      "../../Backend": "Backend"
+    },
     "active": true,
     "targets": "all",
     "icon": [
@@ -34,10 +37,7 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "../../Backend/node"
-    ],
-    "resources": [
-      "../Backend"
+      "bin/node"
     ]
   }
 }
